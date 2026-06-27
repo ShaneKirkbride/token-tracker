@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <Threshold>94</Threshold>
+    <ThresholdType>line</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.msbuild" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <ProjectReference Include="..\..\src\AiUsageDashboard.Contracts\AiUsageDashboard.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\AiUsageDashboard.Core\AiUsageDashboard.Core.csproj" />
+    <ProjectReference Include="..\..\src\AiUsageDashboard.Providers.Mock\AiUsageDashboard.Providers.Mock.csproj" />
+  </ItemGroup>
+</Project>
