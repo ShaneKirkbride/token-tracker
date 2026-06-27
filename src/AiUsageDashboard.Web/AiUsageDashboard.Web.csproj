@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\AiUsageDashboard.Contracts\AiUsageDashboard.Contracts.csproj" />
+    <ProjectReference Include="..\AiUsageDashboard.Core\AiUsageDashboard.Core.csproj" />
+    <ProjectReference Include="..\AiUsageDashboard.Providers.Mock\AiUsageDashboard.Providers.Mock.csproj" />
+  </ItemGroup>
+</Project>
