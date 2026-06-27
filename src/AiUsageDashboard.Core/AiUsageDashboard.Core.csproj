@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\AiUsageDashboard.Contracts\AiUsageDashboard.Contracts.csproj" />
+  </ItemGroup>
+</Project>
