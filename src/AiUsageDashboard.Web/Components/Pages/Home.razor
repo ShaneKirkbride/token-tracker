@@ -1,0 +1,141 @@
+@page "/"
+@rendermode InteractiveServer
+@using AiUsageDashboard.Contracts
+@using AiUsageDashboard.Core
+@inject UsageDashboardService Usage
+
+<PageTitle>Jarvis Usage Command Center</PageTitle>
+
+<section class="hero">
+    <div>
+        <p class="eyebrow">GovCloud-ready AI observability</p>
+        <h1>Jarvis Usage Command Center</h1>
+        <p class="subtitle">Approved model token usage, request volume, and estimated spend across AWS Bedrock, Azure OpenAI, and Google providers.</p>
+    </div>
+    <button class="refresh" @onclick="LoadAsync">Refresh telemetry</button>
+</section>
+
+@if (_loading)
+{
+    <div class="loading">Loading usage telemetry…</div>
+}
+else
+{
+    <section class="cards">
+        <article class="metric">
+            <span>Estimated cost</span>
+            <strong>@_summary.EstimatedCostUsd.ToString("C")</strong>
+            <small>Current selected window</small>
+        </article>
+        <article class="metric">
+            <span>Total tokens</span>
+            <strong>@Format(_summary.TotalTokens)</strong>
+            <small>Input + output + cached</small>
+        </article>
+        <article class="metric">
+            <span>Total requests</span>
+            <strong>@_summary.TotalRequests.ToString("N0")</strong>
+            <small>Gateway-observed calls</small>
+        </article>
+    </section>
+
+    <section class="grid">
+        <article class="panel wide">
+            <div class="panel-title">
+                <h2>Token usage by approved model</h2>
+                <span>Input vs output</span>
+            </div>
+            <div class="bars">
+                @foreach (var row in _records)
+                {
+                    var total = Math.Max(1, row.InputTokens + row.OutputTokens);
+                    <div class="bar-row">
+                        <label>@row.ModelAlias</label>
+                        <div class="bar-track">
+                            <div class="bar-input" style="width:@Percent(row.InputTokens, total)"></div>
+                            <div class="bar-output" style="width:@Percent(row.OutputTokens, total)"></div>
+                        </div>
+                        <span>@Format(total)</span>
+                    </div>
+                }
+            </div>
+        </article>
+
+        <article class="panel">
+            <div class="panel-title">
+                <h2>Provider split</h2>
+                <span>Estimated cost</span>
+            </div>
+            <svg viewBox="0 0 180 180" role="img" aria-label="Provider cost donut chart" class="donut">
+                <circle cx="90" cy="90" r="58" class="donut-base" />
+                <circle cx="90" cy="90" r="58" class="donut-main" stroke-dasharray="250 365" />
+                <circle cx="90" cy="90" r="38" class="donut-hole" />
+                <text x="90" y="86" text-anchor="middle" class="donut-number">@_summary.CostByProvider.Count</text>
+                <text x="90" y="106" text-anchor="middle" class="donut-label">providers</text>
+            </svg>
+            <div class="legend">
+                @foreach (var item in _summary.CostByProvider)
+                {
+                    <div><span></span>@item.Key <b>@item.Value.ToString("C")</b></div>
+                }
+            </div>
+        </article>
+    </section>
+
+    <section class="panel table-panel">
+        <div class="panel-title">
+            <h2>Approved model usage</h2>
+            <span>Estimated, not billing-final</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Provider</th>
+                    <th>Region</th>
+                    <th>Model</th>
+                    <th>Input</th>
+                    <th>Output</th>
+                    <th>Cached</th>
+                    <th>Requests</th>
+                    <th>Est. cost</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _records)
+                {
+                    <tr>
+                        <td><span class="pill">@row.Provider</span></td>
+                        <td>@row.Region</td>
+                        <td>@row.ModelAlias</td>
+                        <td>@row.InputTokens.ToString("N0")</td>
+                        <td>@row.OutputTokens.ToString("N0")</td>
+                        <td>@row.CachedInputTokens.ToString("N0")</td>
+                        <td>@row.Requests.ToString("N0")</td>
+                        <td>@row.EstimatedCostUsd.ToString("C")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    private bool _loading = true;
+    private IReadOnlyList<AiUsageRecord> _records = [];
+    private DashboardSummary _summary = new(0, 0, 0, new Dictionary<string, decimal>(), new Dictionary<string, decimal>());
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var to = DateTimeOffset.UtcNow;
+        var from = to.AddDays(-30);
+        _records = await Usage.GetUsageAsync(from, to);
+        _summary = Usage.Summarize(_records);
+        _loading = false;
+    }
+
+    private static string Percent(long value, long total) => $"{Math.Round(value * 100m / total, 2)}%";
+    private static string Format(long value) => value >= 1_000_000 ? $"{value / 1_000_000m:N1}M" : value.ToString("N0");
+}
