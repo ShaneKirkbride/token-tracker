@@ -20,6 +20,8 @@ public sealed class GatewayUsageProviderTests
 
         Assert.Single(records);
         Assert.Equal("gateway", records[0].Provider);
+        Assert.Equal(10, records[0].InputTokens);
+        Assert.Contains(records[0].Metrics, x => x.Kind == AiUsageDashboard.Contracts.UsageMeterKind.TotalTokens && x.Quantity == 17);
     }
 
 
@@ -100,5 +102,37 @@ public sealed class GatewayUsageProviderTests
             Assert.Contains("/admin/usage", request.RequestUri!.PathAndQuery, StringComparison.Ordinal);
             return Task.FromResult(new HttpResponseMessage(statusCode) { Content = new StringContent(json) });
         }
+    }
+}
+
+public sealed class AwsBedrockQuotaMapperTests
+{
+    [Theory]
+    [InlineData("Tokens per day for model", AiUsageDashboard.Contracts.UsageMeterKind.TotalTokens, 1440)]
+    [InlineData("Maximum tokens allowed", AiUsageDashboard.Contracts.UsageMeterKind.TotalTokens, 1440)]
+    [InlineData("Requests per minute for InvokeModel", AiUsageDashboard.Contracts.UsageMeterKind.RequestsPerMinute, 1)]
+    public void Map_KnownQuotaNames(string quotaName, AiUsageDashboard.Contracts.UsageMeterKind expectedKind, int expectedMinutes)
+    {
+        var quota = AwsBedrockQuotaMapper.Map("aws-bedrock", "us-gov-west-1", "m", quotaName, 10, "");
+
+        Assert.Equal(expectedKind, quota.MeterKind);
+        Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), quota.Window);
+    }
+
+    [Fact]
+    public void Map_JobSizeGbQuota()
+    {
+        var quota = AwsBedrockQuotaMapper.Map("aws-bedrock", "us-gov-west-1", "m", "Batch job size in GB", 50, "GB");
+
+        Assert.Equal(AiUsageDashboard.Contracts.UsageMeterKind.BatchInputGigabytes, quota.MeterKind);
+    }
+
+    [Fact]
+    public void Map_UnknownQuotaNamesArePreserved()
+    {
+        var quota = AwsBedrockQuotaMapper.Map("aws-bedrock", "us-gov-west-1", "m", "Custom vendor quota", 7, "widgets");
+
+        Assert.Equal(AiUsageDashboard.Contracts.UsageMeterKind.Unknown, quota.MeterKind);
+        Assert.Equal("Custom vendor quota", quota.QuotaName);
     }
 }

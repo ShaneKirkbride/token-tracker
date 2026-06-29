@@ -5,7 +5,6 @@
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Policy = "Admin")]
 @inject IDashboardQueryService Dashboard
-@inject NavigationManager Navigation
 
 <PageTitle>Jarvis Usage Command Center</PageTitle>
 
@@ -13,7 +12,7 @@
     <div>
         <p class="eyebrow">GovCloud-ready AI observability</p>
         <h1>Jarvis Usage Command Center</h1>
-        <p class="subtitle">Approved model token usage, request volume, and estimated spend across operational gateway and cloud-provider telemetry.</p>
+        <p class="subtitle">Approved model usage meters, quota utilization, and estimated spend across operational gateway and cloud-provider telemetry.</p>
     </div>
     <div class="actions">
         <label>From <InputDate @bind-Value="_fromDate" /></label>
@@ -30,31 +29,50 @@
 else
 {
     <section class="cards">
-        <article class="metric"><span>Estimated cost</span><strong>@_data.Summary.EstimatedCostUsd.ToString("C")</strong><small>Estimated until billing reconciliation</small></article>
-        <article class="metric"><span>Total tokens</span><strong>@Format(_data.Summary.TotalTokens)</strong><small>Input + output + cached</small></article>
-        <article class="metric"><span>Total requests</span><strong>@_data.Summary.TotalRequests.ToString("N0")</strong><small>Metadata-only gateway calls</small></article>
+        <article class="metric">
+            <span>Estimated cost</span>
+            <strong>@_data.Summary.EstimatedCostUsd.ToString("C")</strong>
+            <small>Only shown when pricing exists</small>
+        </article>
+        <article class="metric">
+            <span>Total tokens</span>
+            <strong>@Format(_data.Summary.TotalTokens)</strong>
+            <small>Input + output + cached compatibility view</small>
+        </article>
+        <article class="metric">
+            <span>Total requests</span>
+            <strong>@_data.Summary.TotalRequests.ToString("N0")</strong>
+            <small>Metadata-only gateway calls</small>
+        </article>
+        <article class="metric">
+            <span>Unpriced meters</span>
+            <strong>@UnpricedMeterCount</strong>
+            <small>Unknown or missing pricing</small>
+        </article>
     </section>
 
     <section class="grid">
         <article class="panel wide">
-            <div class="panel-title"><h2>Cost over time</h2><span>ApexCharts package ready; CSS fallback rendered server-side</span></div>
+            <div class="panel-title">
+                <h2>Cost over time</h2>
+                <span>Meter-priced usage only</span>
+            </div>
             <div class="line-chart">
-                @foreach (var point in _data.CostOverTime.DefaultIfEmpty(new TimeSeriesPoint(DateOnly.FromDateTime(DateTime.UtcNow), 0, 0, 0)))
+                @foreach (var point in CostSeries)
                 {
-                    <div class="line-point" style="height:@ChartHeight(point.CostUsd)"><span>@point.CostUsd.ToString("C")</span><small>@point.Date.ToString("MM-dd")</small></div>
+                    <div class="line-point" style="height:@ChartHeight(point.CostUsd)">
+                        <span>@point.CostUsd.ToString("C")</span>
+                        <small>@point.Date.ToString("MM-dd")</small>
+                    </div>
                 }
             </div>
         </article>
 
         <article class="panel">
-            <div class="panel-title"><h2>Provider split</h2><span>Estimated cost</span></div>
-            <svg viewBox="0 0 180 180" role="img" aria-label="Provider cost donut chart" class="donut">
-                <circle cx="90" cy="90" r="58" class="donut-base" />
-                <circle cx="90" cy="90" r="58" class="donut-main" stroke-dasharray="@DonutDash" />
-                <circle cx="90" cy="90" r="38" class="donut-hole" />
-                <text x="90" y="86" text-anchor="middle" class="donut-number">@_data.Summary.CostByProvider.Count</text>
-                <text x="90" y="106" text-anchor="middle" class="donut-label">providers</text>
-            </svg>
+            <div class="panel-title">
+                <h2>Provider split</h2>
+                <span>Estimated cost</span>
+            </div>
             <div class="legend">
                 @foreach (var item in _data.Summary.CostByProvider)
                 {
@@ -65,27 +83,42 @@ else
     </section>
 
     <section class="panel table-panel">
-        <div class="panel-title"><h2>Tokens by approved model</h2><span>Stacked input/output/cached</span></div>
+        <div class="panel-title">
+            <h2>Usage by meter kind</h2>
+            <span>Meter-based usage, including unknowns</span>
+        </div>
         <div class="bars">
-            @foreach (var group in _data.Records.GroupBy(x => x.ModelAlias))
+            @foreach (var meter in UsageByMeterRows)
             {
-                var input = group.Sum(x => x.InputTokens);
-                var output = group.Sum(x => x.OutputTokens);
-                var cached = group.Sum(x => x.CachedInputTokens);
-                var total = Math.Max(1, input + output + cached);
-                <div class="bar-row"><label>@group.Key</label><div class="bar-track"><div class="bar-input" style="width:@Percent(input, total)"></div><div class="bar-output" style="width:@Percent(output, total)"></div><div class="bar-cached" style="width:@Percent(cached, total)"></div></div><span>@Format(total)</span></div>
+                <div class="bar-row">
+                    <label>@meter.Key @MeterBadge(meter.Key)</label>
+                    <div class="bar-track"><div class="bar-input" style="width:@Percent(meter.Value, MaxMeterQuantity)"></div></div>
+                    <span>@FormatDecimal(meter.Value)</span>
+                </div>
             }
         </div>
     </section>
 
     <section class="panel table-panel">
-        <div class="panel-title"><h2>Approved model usage</h2><span>Prompts/source text are never stored</span></div>
+        <div class="panel-title">
+            <h2>Approved model usage</h2>
+            <span>Prompts/source text are never stored</span>
+        </div>
         <table>
-            <thead><tr><th>Provider</th><th>Region</th><th>Model</th><th>Input</th><th>Output</th><th>Cached</th><th>Requests</th><th>Est. cost</th></tr></thead>
+            <thead><tr><th>Provider</th><th>Region</th><th>Model</th><th>Meters</th><th>Requests</th><th>Quota util.</th><th>Est. cost</th><th>Badges</th></tr></thead>
             <tbody>
                 @foreach (var row in _data.Records)
                 {
-                    <tr><td><span class="pill">@row.Provider</span></td><td>@row.Region</td><td>@row.ModelAlias</td><td>@row.InputTokens.ToString("N0")</td><td>@row.OutputTokens.ToString("N0")</td><td>@row.CachedInputTokens.ToString("N0")</td><td>@row.Requests.ToString("N0")</td><td>@row.EstimatedCostUsd.ToString("C")</td></tr>
+                    <tr>
+                        <td><span class="pill">@row.Provider</span></td>
+                        <td>@row.Region</td>
+                        <td>@row.ModelAlias</td>
+                        <td>@MeterList(row)</td>
+                        <td>@row.Requests.ToString("N0")</td>
+                        <td>@QuotaUtilization(row)</td>
+                        <td>@(row.EstimatedCostUsd?.ToString("C") ?? "Unpriced")</td>
+                        <td>@Badges(row)</td>
+                    </tr>
                 }
             </tbody>
         </table>
@@ -96,12 +129,16 @@ else
     private bool _loading = true;
     private DateTime _fromDate = DateTime.UtcNow.AddDays(-30).Date;
     private DateTime _toDate = DateTime.UtcNow.Date.AddDays(1);
-    private DashboardData _data = new(new DashboardSummary(0, 0, 0, new Dictionary<string, decimal>(), new Dictionary<string, decimal>()), [], []);
+    private DashboardData _data = new(new DashboardSummary(0, 0, 0, new Dictionary<string, decimal>(), new Dictionary<string, decimal>(), new Dictionary<UsageMeterKind, decimal>(), new Dictionary<string, decimal>()), [], [], []);
 
     private string ExportUrl => $"/admin/export.csv?from={Uri.EscapeDataString(From.ToString("O"))}&to={Uri.EscapeDataString(To.ToString("O"))}";
     private DateTimeOffset From => new(_fromDate, TimeSpan.Zero);
     private DateTimeOffset To => new(_toDate, TimeSpan.Zero);
-    private string DonutDash => _data.Summary.EstimatedCostUsd <= 0 ? "0 365" : "250 365";
+    private IReadOnlyDictionary<UsageMeterKind, decimal> UsageByMeter => _data.Summary.UsageByMeter ?? new Dictionary<UsageMeterKind, decimal>();
+    private IReadOnlyList<KeyValuePair<UsageMeterKind, decimal>> UsageByMeterRows => UsageByMeter.ToArray();
+    private IReadOnlyList<TimeSeriesPoint> CostSeries => _data.CostOverTime.Count == 0 ? [new TimeSeriesPoint(DateOnly.FromDateTime(DateTime.UtcNow), 0, 0, 0, null)] : _data.CostOverTime;
+    private decimal MaxMeterQuantity => Math.Max(1, UsageByMeter.Values.DefaultIfEmpty(1).Max());
+    private int UnpricedMeterCount => _data.Records.Count(x => x.HasUnpricedMeters);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -118,6 +155,21 @@ else
         return $"{Math.Max(12, value / max * 140):0}px";
     }
 
-    private static string Percent(long value, long total) => $"{Math.Round(value * 100m / total, 2)}%";
+    private static string Percent(decimal value, decimal total) => $"{Math.Round(value * 100m / total, 2)}%";
     private static string Format(long value) => value >= 1_000_000 ? $"{value / 1_000_000m:N1}M" : value.ToString("N0");
+    private static string FormatDecimal(decimal value) => value >= 1_000_000 ? $"{value / 1_000_000m:N1}M" : value.ToString("N2");
+    private static string MeterBadge(UsageMeterKind kind) => kind == UsageMeterKind.Unknown ? "⚠ unknown" : string.Empty;
+    private static string MeterList(AiUsageRecord row) => string.Join("; ", row.Metrics.Select(m => $"{m.Kind}: {FormatDecimal(m.Quantity)} {m.Unit}"));
+    private static string Badges(AiUsageRecord row) => string.Join(" ", new[] { row.HasUnknownMeters ? "Unknown" : string.Empty, row.HasUnpricedMeters ? "Unpriced" : string.Empty }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+    private string QuotaUtilization(AiUsageRecord row)
+    {
+        var matches = _data.Quotas.Where(q => q.Provider == row.Provider && q.Region == row.Region && q.ModelId == row.ModelId).ToArray();
+        if (matches.Length == 0)
+        {
+            return "—";
+        }
+
+        return string.Join("; ", matches.Select(q => $"{q.MeterKind}: {Percent(row.Metrics.Where(m => m.Kind == q.MeterKind).Sum(m => m.Quantity), Math.Max(1, q.Limit))}"));
+    }
 }
