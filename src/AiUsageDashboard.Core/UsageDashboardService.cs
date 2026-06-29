@@ -42,10 +42,12 @@ public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> provider
     {
         var rows = records.ToArray();
         return new DashboardSummary(
-            rows.Sum(x => x.EstimatedCostUsd),
+            rows.Sum(x => x.EstimatedCostUsd ?? 0m),
             rows.Sum(x => x.InputTokens + x.OutputTokens + x.CachedInputTokens),
             rows.Sum(x => x.Requests),
-            rows.GroupBy(x => x.Provider).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)),
-            rows.GroupBy(x => x.ModelAlias).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)));
+            rows.GroupBy(x => x.Provider).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd ?? 0m)),
+            rows.GroupBy(x => x.ModelAlias).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd ?? 0m)),
+            rows.SelectMany(x => x.Metrics).GroupBy(x => x.Kind).ToDictionary(x => x.Key, x => x.Sum(m => m.Quantity)),
+            new Dictionary<string, decimal>());
     }
 }

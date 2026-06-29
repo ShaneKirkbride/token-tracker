@@ -39,3 +39,26 @@ public sealed class TokenCostEstimatorTests
         Assert.Throws<ArgumentOutOfRangeException>(() => sut.Estimate(input, output, cached, price));
     }
 }
+
+public sealed class MeterCostEstimatorTests
+{
+    [Fact]
+    public void Estimate_UsesMeterPricesAndIgnoresUnpricedMeters()
+    {
+        var sut = new TokenCostEstimator();
+        var cost = sut.Estimate(
+            [new UsageMetric(UsageMeterKind.Images, 3, "images"), new UsageMetric(UsageMeterKind.Unknown, 9, "events")],
+            [new ModelMeterPrice("p", "m", UsageMeterKind.Images, 0.02m, 1, "images")]);
+
+        Assert.Equal(0.06m, cost);
+    }
+
+    [Fact]
+    public void Estimate_ReturnsNullWhenNoMetersArePriced()
+    {
+        var sut = new TokenCostEstimator();
+        var cost = sut.Estimate([new UsageMetric(UsageMeterKind.AudioSeconds, 30, "seconds")], []);
+
+        Assert.Null(cost);
+    }
+}

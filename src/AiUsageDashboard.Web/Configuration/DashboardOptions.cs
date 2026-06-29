@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using AiUsageDashboard.Contracts;
 
 namespace AiUsageDashboard.Web.Configuration;
 
@@ -42,6 +43,7 @@ public sealed class ModelPricingOptions
 {
     public const string SectionName = "ModelPricing";
     public ModelPriceOption[] Prices { get; set; } = [];
+    public ModelMeterPriceOption[] MeterPrices { get; set; } = [];
 }
 
 public sealed class ModelPriceOption
@@ -51,6 +53,28 @@ public sealed class ModelPriceOption
     [Range(0, double.MaxValue)] public decimal InputPer1MTokensUsd { get; set; }
     [Range(0, double.MaxValue)] public decimal OutputPer1MTokensUsd { get; set; }
     [Range(0, double.MaxValue)] public decimal CachedInputPer1MTokensUsd { get; set; }
+}
+
+public sealed class ModelMeterPriceOption
+{
+    [Required] public string Provider { get; set; } = string.Empty;
+    [Required] public string ModelId { get; set; } = string.Empty;
+    public UsageMeterKind MeterKind { get; set; }
+    [Range(0, double.MaxValue)] public decimal PriceUsd { get; set; }
+    [Range(double.Epsilon, double.MaxValue)] public decimal UnitQuantity { get; set; } = 1;
+    [Required] public string Unit { get; set; } = string.Empty;
+}
+
+public sealed class ModelQuotaOption
+{
+    [Required] public string Provider { get; set; } = string.Empty;
+    [Required] public string Region { get; set; } = string.Empty;
+    [Required] public string ModelId { get; set; } = string.Empty;
+    public UsageMeterKind MeterKind { get; set; }
+    [Range(0, double.MaxValue)] public decimal Limit { get; set; }
+    public TimeSpan Window { get; set; }
+    [Required] public string QuotaName { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
 }
 
 public sealed class PollingOptions

@@ -18,4 +18,26 @@ public sealed class TokenCostEstimator
 
         return Math.Round(inputCost + outputCost + cachedCost, 6, MidpointRounding.AwayFromZero);
     }
+
+    public decimal? Estimate(IEnumerable<UsageMetric> metrics, IEnumerable<ModelMeterPrice> prices)
+    {
+        ArgumentNullException.ThrowIfNull(metrics);
+        ArgumentNullException.ThrowIfNull(prices);
+
+        var priceByMeter = prices.ToDictionary(x => x.MeterKind);
+        var total = 0m;
+        var pricedAny = false;
+        foreach (var metric in metrics.Where(x => x.Quantity > 0 && x.Kind != UsageMeterKind.TotalTokens))
+        {
+            if (!priceByMeter.TryGetValue(metric.Kind, out var price) || price.UnitQuantity <= 0)
+            {
+                continue;
+            }
+
+            total += metric.Quantity / price.UnitQuantity * price.PriceUsd;
+            pricedAny = true;
+        }
+
+        return pricedAny ? Math.Round(total, 6, MidpointRounding.AwayFromZero) : null;
+    }
 }

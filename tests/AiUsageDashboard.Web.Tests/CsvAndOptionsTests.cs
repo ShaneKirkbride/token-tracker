@@ -55,3 +55,18 @@ public sealed class CsvAndOptionsTests
     }
 
 }
+
+public sealed class MeterCsvExportTests
+{
+    [Fact]
+    public void ExportUsage_WritesOneRowPerMeterWithPricingBadges()
+    {
+        var csv = new CsvExportService().ExportUsage([
+            new AiUsageRecord("p", "r", "m", "alias", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-01T01:00:00Z"),
+                [new UsageMetric(UsageMeterKind.Images, 2, "images", "Generated images"), new UsageMetric(UsageMeterKind.Unknown, 1, "events", "Mystery")], null)
+        ]);
+
+        Assert.Contains("Images,Generated images,2,images,,False,False", csv, StringComparison.Ordinal);
+        Assert.Contains("Unknown,Mystery,1,events,,False,True", csv, StringComparison.Ordinal);
+    }
+}

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.Data.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -96,7 +97,14 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<UsageDashboardDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    if (await HasLegacyTokenOnlySchemaAsync(db))
+    {
+        await MigrateLegacyTokenSchemaAsync(db);
+    }
+    else
+    {
+        await db.Database.EnsureCreatedAsync();
+    }
 }
 
 if (!app.Environment.IsDevelopment())
@@ -122,5 +130,104 @@ app.MapRazorComponents<App>()
     .RequireAuthorization(security.AdminPolicyName);
 
 app.Run();
+
+static async Task<bool> HasLegacyTokenOnlySchemaAsync(UsageDashboardDbContext db)
+{
+    var connection = (SqliteConnection)db.Database.GetDbConnection();
+    await connection.OpenAsync();
+    try
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'UsageSnapshots';";
+        var hasSnapshots = Convert.ToInt64(await command.ExecuteScalarAsync()) > 0;
+        if (!hasSnapshots)
+        {
+            return false;
+        }
+
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'UsageMetrics';";
+        return Convert.ToInt64(await command.ExecuteScalarAsync()) == 0;
+    }
+    finally
+    {
+        await connection.CloseAsync();
+    }
+}
+
+static async Task MigrateLegacyTokenSchemaAsync(UsageDashboardDbContext db)
+{
+    await db.Database.ExecuteSqlRawAsync("ALTER TABLE UsageSnapshots RENAME TO UsageSnapshots_Legacy;");
+    await CreateMeterSchemaTablesAsync(db);
+    await db.Database.ExecuteSqlRawAsync("""
+        INSERT INTO UsageSnapshots (Id, Provider, Region, ModelId, ModelAlias, WindowStart, WindowEnd, EstimatedCostUsd, CapturedAt)
+        SELECT Id, Provider, Region, ModelId, ModelAlias, WindowStart, WindowEnd, EstimatedCostUsd, CapturedAt
+        FROM UsageSnapshots_Legacy;
+        """);
+    await db.Database.ExecuteSqlRawAsync("""
+        INSERT INTO UsageMetrics (UsageSnapshotId, Kind, Quantity, Unit, Name)
+        SELECT Id, 'InputTokens', InputTokens, 'tokens', 'Input tokens' FROM UsageSnapshots_Legacy
+        UNION ALL SELECT Id, 'OutputTokens', OutputTokens, 'tokens', 'Output tokens' FROM UsageSnapshots_Legacy
+        UNION ALL SELECT Id, 'CachedInputTokens', CachedInputTokens, 'tokens', 'Cached input tokens' FROM UsageSnapshots_Legacy
+        UNION ALL SELECT Id, 'TotalTokens', InputTokens + OutputTokens + CachedInputTokens, 'tokens', 'Total tokens' FROM UsageSnapshots_Legacy
+        UNION ALL SELECT Id, 'Requests', Requests, 'requests', 'Requests' FROM UsageSnapshots_Legacy;
+        """);
+    await db.Database.ExecuteSqlRawAsync("DROP TABLE UsageSnapshots_Legacy;");
+}
+
+static async Task CreateMeterSchemaTablesAsync(UsageDashboardDbContext db)
+{
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "ModelMeterPrices" (
+            "Id" INTEGER NOT NULL CONSTRAINT "PK_ModelMeterPrices" PRIMARY KEY AUTOINCREMENT,
+            "Provider" TEXT NOT NULL,
+            "ModelId" TEXT NOT NULL,
+            "MeterKind" TEXT NOT NULL,
+            "PriceUsd" TEXT NOT NULL,
+            "UnitQuantity" TEXT NOT NULL,
+            "Unit" TEXT NOT NULL
+        );
+        """);
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "ModelQuotas" (
+            "Id" INTEGER NOT NULL CONSTRAINT "PK_ModelQuotas" PRIMARY KEY AUTOINCREMENT,
+            "Provider" TEXT NOT NULL,
+            "Region" TEXT NOT NULL,
+            "ModelId" TEXT NOT NULL,
+            "MeterKind" TEXT NOT NULL,
+            "Limit" TEXT NOT NULL,
+            "Window" TEXT NOT NULL,
+            "QuotaName" TEXT NOT NULL,
+            "Unit" TEXT NOT NULL
+        );
+        """);
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "UsageSnapshots" (
+            "Id" INTEGER NOT NULL CONSTRAINT "PK_UsageSnapshots" PRIMARY KEY AUTOINCREMENT,
+            "Provider" TEXT NOT NULL,
+            "Region" TEXT NOT NULL,
+            "ModelId" TEXT NOT NULL,
+            "ModelAlias" TEXT NOT NULL,
+            "WindowStart" TEXT NOT NULL,
+            "WindowEnd" TEXT NOT NULL,
+            "EstimatedCostUsd" TEXT NULL,
+            "CapturedAt" TEXT NOT NULL
+        );
+        """);
+    await db.Database.ExecuteSqlRawAsync("""
+        CREATE TABLE IF NOT EXISTS "UsageMetrics" (
+            "Id" INTEGER NOT NULL CONSTRAINT "PK_UsageMetrics" PRIMARY KEY AUTOINCREMENT,
+            "UsageSnapshotId" INTEGER NOT NULL,
+            "Kind" TEXT NOT NULL,
+            "Quantity" TEXT NOT NULL,
+            "Unit" TEXT NOT NULL,
+            "Name" TEXT NULL,
+            CONSTRAINT "FK_UsageMetrics_UsageSnapshots_UsageSnapshotId" FOREIGN KEY ("UsageSnapshotId") REFERENCES "UsageSnapshots" ("Id") ON DELETE CASCADE
+        );
+        """);
+    await db.Database.ExecuteSqlRawAsync("""CREATE UNIQUE INDEX IF NOT EXISTS "IX_ModelMeterPrices_Provider_ModelId_MeterKind" ON "ModelMeterPrices" ("Provider", "ModelId", "MeterKind");""");
+    await db.Database.ExecuteSqlRawAsync("""CREATE UNIQUE INDEX IF NOT EXISTS "IX_ModelQuotas_Provider_Region_ModelId_MeterKind_QuotaName" ON "ModelQuotas" ("Provider", "Region", "ModelId", "MeterKind", "QuotaName");""");
+    await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_UsageMetrics_UsageSnapshotId_Kind" ON "UsageMetrics" ("UsageSnapshotId", "Kind");""");
+    await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_UsageSnapshots_Provider_Region_ModelId_WindowStart_WindowEnd" ON "UsageSnapshots" ("Provider", "Region", "ModelId", "WindowStart", "WindowEnd");""");
+}
 
 public partial class Program;

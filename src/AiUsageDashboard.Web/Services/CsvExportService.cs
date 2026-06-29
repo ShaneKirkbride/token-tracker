@@ -14,20 +14,25 @@ public sealed class CsvExportService : ICsvExportService
     public string ExportUsage(IEnumerable<AiUsageRecord> records)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("Provider,Region,ModelId,ModelAlias,WindowStart,WindowEnd,InputTokens,OutputTokens,CachedInputTokens,Requests,EstimatedCostUsd");
+        builder.AppendLine("Provider,Region,ModelId,ModelAlias,WindowStart,WindowEnd,MeterKind,MeterName,Quantity,Unit,EstimatedCostUsd,IsPriced,IsUnknown");
         foreach (var record in records)
         {
-            builder.AppendCsv(record.Provider).Append(',')
-                .AppendCsv(record.Region).Append(',')
-                .AppendCsv(record.ModelId).Append(',')
-                .AppendCsv(record.ModelAlias).Append(',')
-                .Append(record.WindowStart.ToString("O", CultureInfo.InvariantCulture)).Append(',')
-                .Append(record.WindowEnd.ToString("O", CultureInfo.InvariantCulture)).Append(',')
-                .Append(record.InputTokens).Append(',')
-                .Append(record.OutputTokens).Append(',')
-                .Append(record.CachedInputTokens).Append(',')
-                .Append(record.Requests).Append(',')
-                .AppendLine(record.EstimatedCostUsd.ToString(CultureInfo.InvariantCulture));
+            foreach (var metric in record.Metrics)
+            {
+                builder.AppendCsv(record.Provider).Append(',')
+                    .AppendCsv(record.Region).Append(',')
+                    .AppendCsv(record.ModelId).Append(',')
+                    .AppendCsv(record.ModelAlias).Append(',')
+                    .Append(record.WindowStart.ToString("O", CultureInfo.InvariantCulture)).Append(',')
+                    .Append(record.WindowEnd.ToString("O", CultureInfo.InvariantCulture)).Append(',')
+                    .Append(metric.Kind).Append(',')
+                    .AppendCsv(metric.Name ?? string.Empty).Append(',')
+                    .Append(metric.Quantity.ToString(CultureInfo.InvariantCulture)).Append(',')
+                    .AppendCsv(metric.Unit).Append(',')
+                    .Append(record.EstimatedCostUsd?.ToString(CultureInfo.InvariantCulture) ?? string.Empty).Append(',')
+                    .Append(record.EstimatedCostUsd.HasValue).Append(',')
+                    .AppendLine((metric.Kind == UsageMeterKind.Unknown).ToString());
+            }
         }
 
         return builder.ToString();
