@@ -48,3 +48,12 @@ th, td { padding: 16px 18px; text-align: left; border-top: 1px solid rgba(255,25
 th { color: #8ea4bd; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
 .pill { display: inline-block; border: 1px solid rgba(111,183,255,.38); background: rgba(111,183,255,.12); padding: 6px 10px; border-radius: 999px; color: #a6dcff; font-size: .82rem; }
 @media (max-width: 900px) { .hero, .grid { grid-template-columns: 1fr; display: grid; } .cards { grid-template-columns: 1fr; } .bar-row { grid-template-columns: 1fr; } table { min-width: 900px; } }
+.actions { display: flex; gap: 0.8rem; align-items: end; flex-wrap: wrap; }
+.actions label { color: #cbd5e1; display: grid; gap: 0.25rem; font-size: 0.8rem; }
+.actions input { background: #0f172a; color: #e2e8f0; border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 0.7rem; padding: 0.65rem; }
+.refresh.link { text-decoration: none; display: inline-block; }
+.bar-cached { background: linear-gradient(90deg, #f59e0b, #fbbf24); height: 100%; }
+.line-chart { min-height: 190px; display: flex; gap: 0.7rem; align-items: end; padding-top: 1rem; }
+.line-point { flex: 1; min-height: 12px; border-radius: 0.8rem 0.8rem 0 0; background: linear-gradient(180deg, #38bdf8, #2563eb); position: relative; display: flex; align-items: flex-start; justify-content: center; }
+.line-point span { position: absolute; top: -1.5rem; font-size: 0.75rem; color: #e2e8f0; }
+.line-point small { position: absolute; bottom: -1.5rem; color: #94a3b8; }
