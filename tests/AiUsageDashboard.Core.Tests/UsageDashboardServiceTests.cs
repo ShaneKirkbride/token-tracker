@@ -15,7 +15,7 @@ public sealed class UsageDashboardServiceTests
             new StubProvider("a-provider", [Record("a-provider", "Alpha")])
         ]);
 
-        var records = await sut.GetUsageAsync(from, to);
+        var records = await sut.GetUsageAsync(from, to, TestContext.Current.CancellationToken);
 
         Assert.Collection(records,
             first => Assert.Equal("a-provider", first.Provider),
@@ -28,7 +28,24 @@ public sealed class UsageDashboardServiceTests
         var now = DateTimeOffset.UtcNow;
         var sut = new UsageDashboardService([]);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => sut.GetUsageAsync(now, now));
+        await Assert.ThrowsAsync<ArgumentException>(() => sut.GetUsageAsync(now, now, TestContext.Current.CancellationToken));
+    }
+
+
+    [Fact]
+    public async Task GetUsageAsync_ContinuesWhenProviderFails()
+    {
+        var from = DateTimeOffset.Parse("2026-06-01T00:00:00Z");
+        var to = from.AddDays(1);
+        var sut = new UsageDashboardService([
+            new FailingProvider(),
+            new StubProvider("a-provider", [Record("a-provider", "Alpha")])
+        ]);
+
+        var records = await sut.GetUsageAsync(from, to, TestContext.Current.CancellationToken);
+
+        Assert.Single(records);
+        Assert.Equal("a-provider", records[0].Provider);
     }
 
     [Fact]
@@ -55,6 +72,12 @@ public sealed class UsageDashboardServiceTests
 
     private static AiUsageRecord Record(string provider, string alias, decimal cost = 0m, int requests = 1, long input = 1, long output = 1, long cached = 0) =>
         new(provider, "region", alias.ToLowerInvariant().Replace(' ', '-'), alias, DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, input, output, cached, requests, cost);
+
+    private sealed class FailingProvider : IAiUsageProvider
+    {
+        public string ProviderName => "failing";
+        public Task<IReadOnlyList<AiUsageRecord>> GetUsageAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) => throw new InvalidOperationException("boom");
+    }
 
     private sealed class StubProvider(string name, IReadOnlyList<AiUsageRecord> records) : IAiUsageProvider
     {

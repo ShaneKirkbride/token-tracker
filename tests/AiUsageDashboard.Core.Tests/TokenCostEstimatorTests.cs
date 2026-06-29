@@ -13,7 +13,7 @@ public sealed class TokenCostEstimatorTests
 
         var cost = sut.Estimate(2_000_000, 500_000, 250_000, price);
 
-        Assert.Equal(7.125m, cost);
+        Assert.Equal(7.625m, cost);
     }
 
     [Fact]

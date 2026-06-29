@@ -1,8 +1,9 @@
 using AiUsageDashboard.Contracts;
+using Microsoft.Extensions.Logging;
 
 namespace AiUsageDashboard.Core;
 
-public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> providers)
+public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> providers, ILogger<UsageDashboardService>? logger = null)
 {
     private readonly IReadOnlyList<IAiUsageProvider> _providers = providers.ToList();
 
@@ -13,10 +14,27 @@ public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> provider
             throw new ArgumentException("The end date must be after the start date.", nameof(to));
         }
 
-        var results = await Task.WhenAll(_providers.Select(p => p.GetUsageAsync(from, to, cancellationToken)));
-        return results.SelectMany(x => x)
-            .OrderBy(x => x.Provider)
-            .ThenBy(x => x.ModelAlias)
+        var results = new List<AiUsageRecord>();
+        foreach (var provider in _providers)
+        {
+            try
+            {
+                var providerRecords = await provider.GetUsageAsync(from, to, cancellationToken);
+                results.AddRange(providerRecords);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Usage provider {ProviderName} failed for {From:o} to {To:o}.", provider.ProviderName, from, to);
+            }
+        }
+
+        return results
+            .OrderBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ModelAlias, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
@@ -31,10 +49,3 @@ public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> provider
             rows.GroupBy(x => x.ModelAlias).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)));
     }
 }
-
-public sealed record DashboardSummary(
-    decimal EstimatedCostUsd,
-    long TotalTokens,
-    int TotalRequests,
-    IReadOnlyDictionary<string, decimal> CostByProvider,
-    IReadOnlyDictionary<string, decimal> CostByModel);

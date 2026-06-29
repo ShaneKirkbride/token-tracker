@@ -427,3 +427,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# AiUsageDashboard local runtime/test artifacts
+*.db
+*.db-shm
+*.db-wal
+coverage.cobertura.xml
+TestResults/

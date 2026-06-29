@@ -1,44 +1,61 @@
-# token-tracker
+# token-tracker / AiUsageDashboard
 
-Blazor/.NET 10 dashboard for tracking approved AI model token usage, request volume, and estimated cost across cloud providers.
+Production-ready skeleton for a Blazor/.NET 10 AI usage dashboard that tracks approved model token usage, request volume, and estimated cost across operational gateway and cloud-provider telemetry.
 
-## What is included
+## Solution layout
 
-- `AiUsageDashboard.Web` - Blazor Web App with dashboard cards, token bars, provider split graphic, and usage table.
-- `AiUsageDashboard.Contracts` - provider-neutral records and `IAiUsageProvider`.
-- `AiUsageDashboard.Core` - cost estimation, model approval policy, usage aggregation.
-- `AiUsageDashboard.Providers.Mock` - deterministic provider for local demos/tests.
-- `AiUsageDashboard.Core.Tests` - xUnit tests with Coverlet coverage threshold set to 94% line coverage.
+- `src/AiUsageDashboard.Contracts` - provider-neutral records and interfaces.
+- `src/AiUsageDashboard.Core` - cost estimation, approved-model policy, provider orchestration, summary grouping.
+- `src/AiUsageDashboard.Storage` - EF Core SQLite storage, metadata entities, repositories, and dashboard query service.
+- `src/AiUsageDashboard.Providers.Gateway` - HttpClientFactory-ready gateway telemetry provider for `GET {BaseUrl}/admin/usage?from={from:o}&to={to:o}`.
+- `src/AiUsageDashboard.Providers.AwsBedrock` - GovCloud-ready AWS Bedrock extension point; intentionally metadata-only stub.
+- `src/AiUsageDashboard.Providers.AzureOpenAI` - Azure OpenAI extension point; intentionally metadata-only stub.
+- `src/AiUsageDashboard.Providers.GoogleVertex` - Google Vertex extension point; intentionally metadata-only stub.
+- `src/AiUsageDashboard.Web` - dark Blazor dashboard, polling, auth-ready structure, CSV export, config, and local SQLite hosting.
+- `tests/*` - xUnit coverage for core, provider, storage, and web support logic.
 
 ## Run locally
 
-```powershell
-dotnet restore .\AiUsageDashboard.sln
-dotnet run --project .\src\AiUsageDashboard.Web\AiUsageDashboard.Web.csproj
+```bash
+dotnet restore AiUsageDashboard.sln
+dotnet build AiUsageDashboard.sln -c Release --no-restore
+dotnet run --project src/AiUsageDashboard.Web/AiUsageDashboard.Web.csproj
 ```
+
+Local development authentication is enabled by default and grants the `UsageDashboard.Admin` role. Disable it only after configuring enterprise OIDC placeholders under `Authentication:EnterpriseOidc`.
 
 ## Test with coverage gate
 
-```powershell
-dotnet test .\AiUsageDashboard.sln -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Threshold=94 /p:ThresholdType=line /p:ThresholdStat=total
+```bash
+dotnet test AiUsageDashboard.sln -c Release --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Threshold=94 /p:ThresholdType=line /p:ThresholdStat=total
 ```
 
-## Production path
+Coverage excludes Blazor rendering glue, startup wiring, EF DbContext mapping boilerplate, and intentional cloud-provider stubs. Core, gateway provider, storage repository/query logic, configuration validators, and CSV formatting are covered by executable tests.
 
-For Jarvis/GovCloud usage, make the AI Gateway the operational source of truth:
+## Configuration
+
+Configuration lives in `src/AiUsageDashboard.Web/appsettings.json` and can be overridden with `appsettings.Development.json` or environment variables.
+
+Key sections:
+
+- `Providers` - enable/disable gateway and cloud providers; configure base URLs and allowlists.
+- `ApprovedModels` - provider/region/model/deployment allowlist driving dashboard visibility.
+- `ModelPricing` - estimated pricing per 1M input, output, and cached input tokens.
+- `Polling` - background polling interval and lookback window.
+- `Security` - local development auth toggle and Admin policy role.
+
+Provider clients must collect and persist usage metadata only. Raw prompts, source code, and response bodies are out of scope for storage.
+
+## Operational source of truth
+
+Gateway telemetry is the operational source of truth:
 
 ```http
 GET /admin/usage?from=2026-06-01T00:00:00Z&to=2026-06-27T23:59:59Z
 ```
 
-Then implement real providers behind `IAiUsageProvider`:
+Cloud-provider billing integrations are intentionally stubbed for later reconciliation work because billing APIs can lag and usually provide less operational granularity than gateway telemetry.
 
-- `AwsBedrockUsageProvider` - CloudWatch metrics/logs or gateway audit table reconciliation.
-- `AzureOpenAiUsageProvider` - gateway audit table plus Azure cost reconciliation.
-- `GoogleVertexUsageProvider` - BigQuery billing export plus gateway audit data.
+## CI and container
 
-Cloud billing APIs should be treated as reconciliation because they can lag and usually do not provide the same operational granularity as gateway telemetry.
-
-## Current status
-
-This is a starter solution/prototype. The next production steps are persistence, real provider implementations, auth, appsettings-based model/pricing configuration, CI, and real charting.
+GitHub Actions in `.github/workflows/ci.yml` runs restore, build, coverage-gated tests, and publishes a web artifact. The root `Dockerfile` publishes and runs the Blazor app on port `8080`.

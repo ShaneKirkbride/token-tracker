@@ -3,5 +3,15 @@
     <ProjectReference Include="..\AiUsageDashboard.Contracts\AiUsageDashboard.Contracts.csproj" />
     <ProjectReference Include="..\AiUsageDashboard.Core\AiUsageDashboard.Core.csproj" />
     <ProjectReference Include="..\AiUsageDashboard.Providers.Mock\AiUsageDashboard.Providers.Mock.csproj" />
+    <ProjectReference Include="..\AiUsageDashboard.Storage\AiUsageDashboard.Storage.csproj" />
+    <ProjectReference Include="..\AiUsageDashboard.Providers.Gateway\AiUsageDashboard.Providers.Gateway.csproj" />
+    <ProjectReference Include="..\AiUsageDashboard.Providers.AwsBedrock\AiUsageDashboard.Providers.AwsBedrock.csproj" />
+    <ProjectReference Include="..\AiUsageDashboard.Providers.AzureOpenAI\AiUsageDashboard.Providers.AzureOpenAI.csproj" />
+    <ProjectReference Include="..\AiUsageDashboard.Providers.GoogleVertex\AiUsageDashboard.Providers.GoogleVertex.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Blazor-ApexCharts" Version="6.0.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
   </ItemGroup>
 </Project>
