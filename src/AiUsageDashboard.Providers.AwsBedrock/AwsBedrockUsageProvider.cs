@@ -160,9 +160,9 @@ public class CloudWatchBedrockUsageProvider(
 
         var metricNamesByQueryId = request.MetricDataQueries.ToDictionary(query => query.Id, query => query.MetricStat.Metric.MetricName, StringComparer.OrdinalIgnoreCase);
         var response = await cloudWatch.GetMetricDataAsync(request, cancellationToken);
-        return response.MetricDataResults
+        return (response.MetricDataResults ?? [])
             .Where(result => metricNamesByQueryId.ContainsKey(result.Id))
-            .Select(result => new { MetricName = metricNamesByQueryId[result.Id], Value = result.Values.Sum() })
+            .Select(result => new { MetricName = metricNamesByQueryId[result.Id], Value = result.Values?.Sum() ?? 0d })
             .ToDictionary(x => x.MetricName, x => checked((long)Math.Round(x.Value, MidpointRounding.AwayFromZero)), StringComparer.OrdinalIgnoreCase);
     }
 
