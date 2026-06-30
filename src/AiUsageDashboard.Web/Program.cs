@@ -4,17 +4,20 @@ using AiUsageDashboard.Providers.AwsBedrock;
 using AiUsageDashboard.Providers.AzureOpenAI;
 using AiUsageDashboard.Providers.Gateway;
 using AiUsageDashboard.Providers.GoogleVertex;
-using AiUsageDashboard.Providers.Mock;
 using AiUsageDashboard.Storage;
 using AiUsageDashboard.Web.Components;
 using AiUsageDashboard.Web.Configuration;
 using AiUsageDashboard.Web.Services;
+using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("en-US");
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -35,8 +38,15 @@ builder.Services.AddScoped<IDashboardQueryService, DashboardQueryService>();
 builder.Services.AddSingleton<ICsvExportService, CsvExportService>();
 
 builder.Services.AddSingleton<TokenCostEstimator>();
+builder.Services.AddSingleton(serviceProvider =>
+{
+    var models = serviceProvider.GetRequiredService<IOptions<ApprovedModelsOptions>>().Value.Models
+        .Select(model => new ApprovedModel(model.Provider, model.Region, model.ModelId, model.Alias, model.IsApproved, model.IsGovCloud, model.EnvironmentTag))
+        .ToArray();
+    return new ApprovedModelPolicy(models);
+});
 builder.Services.AddScoped<UsageDashboardService>();
-builder.Services.AddSingleton<IAiUsageProvider, MockUsageProvider>();
+builder.Services.AddMockUsageProviderIfEnabled(builder.Configuration);
 
 builder.Services.AddOptions<GatewayUsageProviderOptions>().Configure<IOptions<ProviderOptions>>((gateway, providers) =>
 {
@@ -92,6 +102,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+app.MapGet("/healthz", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
 
 using (var scope = app.Services.CreateScope())
 {

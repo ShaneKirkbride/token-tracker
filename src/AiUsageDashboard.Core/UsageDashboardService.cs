@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace AiUsageDashboard.Core;
 
-public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> providers, ILogger<UsageDashboardService>? logger = null)
+public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> providers, ApprovedModelPolicy? approvedModelPolicy = null, ILogger<UsageDashboardService>? logger = null)
 {
     private readonly IReadOnlyList<IAiUsageProvider> _providers = providers.ToList();
 
@@ -32,7 +32,9 @@ public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> provider
             }
         }
 
-        return results
+        var filteredResults = approvedModelPolicy is null ? results : approvedModelPolicy.Filter(results);
+
+        return filteredResults
             .OrderBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
             .ThenBy(x => x.ModelAlias, StringComparer.OrdinalIgnoreCase)
             .ToArray();
