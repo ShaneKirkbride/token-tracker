@@ -1,4 +1,8 @@
 using AiUsageDashboard.Contracts;
+using AiUsageDashboard.Core;
+using Amazon;
+using Amazon.CloudWatch;
+using Amazon.CloudWatch.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -10,22 +14,167 @@ public sealed class AwsBedrockUsageProviderOptions
     public string[] AllowedProviders { get; set; } = [];
     public string[] AllowedRegions { get; set; } = [];
     public string[] AllowedModels { get; set; } = [];
+    public ApprovedModel[] ApprovedModels { get; set; } = [];
+    public ModelPrice[] ModelPrices { get; set; } = [];
 }
 
-public sealed class AwsBedrockUsageProvider(IOptions<AwsBedrockUsageProviderOptions> options, ILogger<AwsBedrockUsageProvider> logger) : IAiUsageProvider
+
+public interface ICloudWatchBedrockClientFactory
 {
+    ICloudWatchBedrockMetricsClient Create(string region);
+}
+
+public interface ICloudWatchBedrockMetricsClient : IDisposable
+{
+    Task<GetMetricDataResponse> GetMetricDataAsync(GetMetricDataRequest request, CancellationToken cancellationToken);
+}
+
+public sealed class CloudWatchBedrockMetricsClient(IAmazonCloudWatch cloudWatch) : ICloudWatchBedrockMetricsClient
+{
+    public Task<GetMetricDataResponse> GetMetricDataAsync(GetMetricDataRequest request, CancellationToken cancellationToken) => cloudWatch.GetMetricDataAsync(request, cancellationToken);
+    public void Dispose() => cloudWatch.Dispose();
+}
+
+public sealed class CloudWatchBedrockClientFactory : ICloudWatchBedrockClientFactory
+{
+    public ICloudWatchBedrockMetricsClient Create(string region) => new CloudWatchBedrockMetricsClient(new AmazonCloudWatchClient(RegionEndpoint.GetBySystemName(region)));
+}
+
+public class CloudWatchBedrockUsageProvider(
+    IOptions<AwsBedrockUsageProviderOptions> options,
+    ICloudWatchBedrockClientFactory cloudWatchClientFactory,
+    TokenCostEstimator costEstimator,
+    ILogger<CloudWatchBedrockUsageProvider> logger) : IAiUsageProvider
+{
+    private const string MetricNamespace = "AWS/Bedrock";
+    private static readonly string[] CacheMetricNames = ["CacheReadInputTokenCount", "CachedInputTokenCount", "InputTokenCountFromCache"];
+
     public string ProviderName => "aws-bedrock";
 
-    public Task<IReadOnlyList<AiUsageRecord>> GetUsageAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AiUsageRecord>> GetUsageAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!options.Value.Enabled)
+        var providerOptions = options.Value;
+        if (!providerOptions.Enabled)
         {
-            return Task.FromResult<IReadOnlyList<AiUsageRecord>>([]);
+            return [];
         }
 
-        logger.LogInformation("{ProviderName} provider integration is enabled for {AllowedRegionCount} configured regions and {AllowedModelCount} configured models. Cloud billing reconciliation is intentionally stubbed.", ProviderName, options.Value.AllowedRegions.Length, options.Value.AllowedModels.Length);
-        // TODO: Integrate this provider with cloud-native usage/billing APIs. Do not collect raw prompts/source text; persist usage metadata only.
-        return Task.FromResult<IReadOnlyList<AiUsageRecord>>([]);
+        var approvedModels = GetApprovedModels(providerOptions).ToArray();
+        if (approvedModels.Length == 0)
+        {
+            logger.LogWarning("{ProviderName} provider is enabled but has no approved Bedrock models to query.", ProviderName);
+            return [];
+        }
+
+        var records = new List<AiUsageRecord>();
+        foreach (var regionGroup in approvedModels.GroupBy(model => model.Region, StringComparer.OrdinalIgnoreCase))
+        {
+            using var cloudWatch = cloudWatchClientFactory.Create(regionGroup.Key);
+            foreach (var model in regionGroup)
+            {
+                var record = await GetModelUsageAsync(cloudWatch, model, providerOptions.ModelPrices, from, to, cancellationToken);
+                if (record is not null)
+                {
+                    records.Add(record);
+                }
+            }
+        }
+
+        return records;
+    }
+
+    private async Task<AiUsageRecord?> GetModelUsageAsync(
+        ICloudWatchBedrockMetricsClient cloudWatch,
+        ApprovedModel model,
+        IReadOnlyCollection<ModelPrice> prices,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
+    {
+        var metricValues = await GetMetricValuesAsync(cloudWatch, model.ModelId, from, to, cancellationToken);
+        var inputTokens = metricValues.GetValueOrDefault("InputTokenCount");
+        var outputTokens = metricValues.GetValueOrDefault("OutputTokenCount");
+        var requests = metricValues.GetValueOrDefault("Invocations");
+        var cachedInputTokens = CacheMetricNames.Sum(metricName => metricValues.GetValueOrDefault(metricName));
+
+        if (inputTokens == 0 && outputTokens == 0 && requests == 0 && cachedInputTokens == 0)
+        {
+            return null;
+        }
+
+        var price = prices.FirstOrDefault(price => string.Equals(price.Provider, ProviderName, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(price.ModelId, model.ModelId, StringComparison.OrdinalIgnoreCase))
+            ?? new ModelPrice(ProviderName, model.ModelId, 0m, 0m, 0m);
+        var cost = costEstimator.Estimate(inputTokens, outputTokens, cachedInputTokens, price);
+
+        return new AiUsageRecord(
+            ProviderName,
+            model.Region,
+            model.ModelId,
+            model.Alias,
+            from,
+            to,
+            inputTokens,
+            outputTokens,
+            cachedInputTokens,
+            checked((int)Math.Min(requests, int.MaxValue)),
+            cost);
+    }
+
+    private static async Task<IReadOnlyDictionary<string, long>> GetMetricValuesAsync(
+        ICloudWatchBedrockMetricsClient cloudWatch,
+        string modelId,
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
+    {
+        var metricNames = new[] { "InputTokenCount", "OutputTokenCount", "Invocations" }.Concat(CacheMetricNames).ToArray();
+        var request = new GetMetricDataRequest
+        {
+            StartTime = from.UtcDateTime,
+            EndTime = to.UtcDateTime,
+            ScanBy = ScanBy.TimestampAscending,
+            MetricDataQueries = metricNames.Select((metricName, index) => new MetricDataQuery
+            {
+                Id = $"m{index}",
+                ReturnData = true,
+                MetricStat = new MetricStat
+                {
+                    Period = Math.Max(60, (int)Math.Ceiling((to - from).TotalSeconds)),
+                    Stat = "Sum",
+                    Metric = new Metric
+                    {
+                        Namespace = MetricNamespace,
+                        MetricName = metricName,
+                        Dimensions = [new Dimension { Name = "ModelId", Value = modelId }]
+                    }
+                }
+            }).ToList()
+        };
+
+        var metricNamesByQueryId = request.MetricDataQueries.ToDictionary(query => query.Id, query => query.MetricStat.Metric.MetricName, StringComparer.OrdinalIgnoreCase);
+        var response = await cloudWatch.GetMetricDataAsync(request, cancellationToken);
+        return response.MetricDataResults
+            .Where(result => metricNamesByQueryId.ContainsKey(result.Id))
+            .Select(result => new { MetricName = metricNamesByQueryId[result.Id], Value = result.Values.Sum() })
+            .ToDictionary(x => x.MetricName, x => checked((long)Math.Round(x.Value, MidpointRounding.AwayFromZero)), StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<ApprovedModel> GetApprovedModels(AwsBedrockUsageProviderOptions options)
+    {
+        var allowedModels = options.AllowedModels.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allowedRegions = options.AllowedRegions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return options.ApprovedModels.Where(model => model.IsApproved
+            && string.Equals(model.Provider, "aws-bedrock", StringComparison.OrdinalIgnoreCase)
+            && (allowedModels.Count == 0 || allowedModels.Contains(model.ModelId))
+            && (allowedRegions.Count == 0 || allowedRegions.Contains(model.Region)));
     }
 }
+
+public sealed class AwsBedrockUsageProvider(
+    IOptions<AwsBedrockUsageProviderOptions> options,
+    ICloudWatchBedrockClientFactory cloudWatchClientFactory,
+    TokenCostEstimator costEstimator,
+    ILogger<CloudWatchBedrockUsageProvider> logger)
+    : CloudWatchBedrockUsageProvider(options, cloudWatchClientFactory, costEstimator, logger);

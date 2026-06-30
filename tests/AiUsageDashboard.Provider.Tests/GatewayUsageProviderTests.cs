@@ -1,5 +1,4 @@
 using System.Net;
-using AiUsageDashboard.Providers.AwsBedrock;
 using AiUsageDashboard.Providers.Gateway;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -65,15 +64,6 @@ public sealed class GatewayUsageProviderTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetUsageAsync(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, CancellationToken.None));
     }
-
-    [Fact]
-    public async Task StubProvider_ReturnsNoPromptData()
-    {
-        var provider = new AwsBedrockUsageProvider(Options.Create(new AwsBedrockUsageProviderOptions { Enabled = true, AllowedModels = ["m"] }), NullLogger<AwsBedrockUsageProvider>.Instance);
-        var records = await provider.GetUsageAsync(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, CancellationToken.None);
-        Assert.Empty(records);
-    }
-
 
     [Fact]
     public async Task GetUsageAsync_RethrowsRequestedCancellation()
