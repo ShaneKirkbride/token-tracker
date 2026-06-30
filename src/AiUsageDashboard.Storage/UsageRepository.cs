@@ -57,14 +57,36 @@ public interface IDashboardQueryService
     Task<DashboardData> GetDashboardAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
 }
 
-public sealed class DashboardQueryService(IUsageSnapshotRepository repository) : IDashboardQueryService
+public sealed class DashboardQueryService(IUsageSnapshotRepository repository, IEnumerable<IAiUsageProvider> providers) : IDashboardQueryService
 {
+    private readonly HashSet<string> _knownProviders = providers
+        .Select(x => x.ProviderName)
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     public async Task<DashboardData> GetDashboardAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
     {
-        var records = await repository.QueryAsync(from, to, cancellationToken);
-        var series = await repository.GetCostOverTimeAsync(from, to, cancellationToken);
+        var records = (await repository.QueryAsync(from, to, cancellationToken))
+            .Where(IsKnownProvider)
+            .ToArray();
+        var series = BuildCostOverTime(records);
         var summary = BuildSummary(records);
         return new DashboardData(summary, records, series);
+    }
+
+    private bool IsKnownProvider(AiUsageRecord record) => _knownProviders.Contains(record.Provider);
+
+    public static IReadOnlyList<TimeSeriesPoint> BuildCostOverTime(IEnumerable<AiUsageRecord> records)
+    {
+        return records
+            .GroupBy(x => DateOnly.FromDateTime(x.WindowStart.UtcDateTime.Date))
+            .OrderBy(x => x.Key)
+            .Select(x => new TimeSeriesPoint(
+                x.Key,
+                x.Sum(r => r.EstimatedCostUsd),
+                x.Sum(r => r.InputTokens + r.OutputTokens + r.CachedInputTokens),
+                x.Sum(r => r.Requests)))
+            .ToArray();
     }
 
     public static DashboardSummary BuildSummary(IEnumerable<AiUsageRecord> records)
