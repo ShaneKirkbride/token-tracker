@@ -6,13 +6,14 @@ public sealed class ProviderOptions
 {
     public const string SectionName = "Providers";
     public ProviderEndpointOptions Gateway { get; set; } = new();
-    public ProviderEndpointOptions AwsBedrock { get; set; } = new() { Name = "aws-bedrock" };
+    public CloudWatchBedrockEndpointOptions CloudWatchBedrock { get; set; } = new();
+    public CloudWatchBedrockEndpointOptions AwsBedrock { get; set; } = new() { Name = "aws-bedrock" };
     public ProviderEndpointOptions AzureOpenAi { get; set; } = new() { Name = "azure-openai" };
     public ProviderEndpointOptions GoogleVertex { get; set; } = new() { Name = "google-vertex" };
     public ProviderEndpointOptions Mock { get; set; } = new() { Name = "mock" };
 }
 
-public sealed class ProviderEndpointOptions
+public class ProviderEndpointOptions
 {
     public string Name { get; set; } = string.Empty;
     public bool Enabled { get; set; }
@@ -20,6 +21,13 @@ public sealed class ProviderEndpointOptions
     public string[] AllowedProviders { get; set; } = [];
     public string[] AllowedRegions { get; set; } = [];
     public string[] AllowedModels { get; set; } = [];
+}
+
+public sealed class CloudWatchBedrockEndpointOptions : ProviderEndpointOptions
+{
+    public CloudWatchBedrockEndpointOptions() => Name = "aws-bedrock";
+    public string Region { get; set; } = "us-gov-west-1";
+    public string Namespace { get; set; } = "AWS/Bedrock";
 }
 
 public sealed class ApprovedModelsOptions
@@ -59,7 +67,7 @@ public sealed class PollingOptions
     public const string SectionName = "Polling";
     public bool Enabled { get; set; } = true;
     [Range(1, 1440)] public int IntervalMinutes { get; set; } = 15;
-    [Range(1, 1440)] public int LookbackMinutes { get; set; } = 60;
+    [Range(1, 10080)] public int LookbackMinutes { get; set; } = 60;
 }
 
 public sealed class SecurityOptions

@@ -125,6 +125,26 @@ public sealed class UsageRepositoryTests : IDisposable
         Assert.DoesNotContain("azure-openai", data.Summary.CostByProvider.Keys);
     }
 
+
+    [Fact]
+    public async Task StoreAsync_ReplacesDuplicatePollingSnapshotsForSameWindow()
+    {
+        await using var db = CreateDbContext();
+        await db.Database.EnsureCreatedAsync(CancellationToken.None);
+        var repository = new EfUsageSnapshotRepository(db);
+        var start = DateTimeOffset.Parse("2026-06-01T00:00:00Z");
+
+        await repository.StoreAsync([Record("aws-bedrock", "Jarvis Chat", start, 1m, "openai.gpt-oss-120b-1:0")], DateTimeOffset.Parse("2026-06-01T01:00:00Z"), CancellationToken.None);
+        await repository.StoreAsync([Record("aws-bedrock", "Jarvis Chat", start, 2m, "openai.gpt-oss-120b-1:0")], DateTimeOffset.Parse("2026-06-01T01:15:00Z"), CancellationToken.None);
+
+        var service = new DashboardQueryService(repository, Policy("aws-bedrock", "region", "openai.gpt-oss-120b-1:0"));
+        var data = await service.GetDashboardAsync(DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-02T00:00:00Z"), CancellationToken.None);
+
+        var row = Assert.Single(data.Records);
+        Assert.Equal(2m, row.EstimatedCostUsd);
+        Assert.Equal(1, row.Requests);
+    }
+
     public void Dispose() => _connection.Dispose();
 
 

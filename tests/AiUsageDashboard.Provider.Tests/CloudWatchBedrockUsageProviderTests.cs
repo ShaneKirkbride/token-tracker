@@ -56,6 +56,40 @@ public sealed class CloudWatchBedrockUsageProviderTests
         Assert.Equal("openai.gpt-oss-120b-1:0", record.ModelId);
     }
 
+
+    [Fact]
+    public async Task GetUsageAsync_ApprovedModelFilteringIncludesOnlyJarvisModels()
+    {
+        var options = CreateOptions(["openai.gpt-oss-120b-1:0", "meta.llama3-70b-instruct-v1:0"]);
+        options.ApprovedModels =
+        [
+            .. options.ApprovedModels,
+            new ApprovedModel("aws-bedrock", "us-gov-west-1", "anthropic.claude-3-5-sonnet", "Not Jarvis", true, true, "Jarvis1"),
+            new ApprovedModel("aws-bedrock", "us-gov-west-1", "amazon.titan", "Not Jarvis 2", true, true, "Jarvis1")
+        ];
+        var provider = new CloudWatchBedrockUsageProvider(Options.Create(options), new FakeFactory(new Dictionary<string, double[]> { ["InputTokenCount"] = [10] }), new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
+
+        var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
+
+        Assert.Equal(["meta.llama3-70b-instruct-v1:0", "openai.gpt-oss-120b-1:0"], records.Select(record => record.ModelId).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public async Task GetUsageAsync_UsesConfiguredRegionNamespaceAndMetrics()
+    {
+        var factory = new CapturingFactory(new Dictionary<string, double[]> { ["InputTokenCount"] = [10] });
+        var options = CreateOptions(["openai.gpt-oss-120b-1:0"]);
+        options.Region = "us-gov-west-1";
+        options.Namespace = "AWS/Bedrock";
+        var provider = new CloudWatchBedrockUsageProvider(Options.Create(options), factory, new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
+
+        await provider.GetUsageAsync(From, To, CancellationToken.None);
+
+        Assert.Equal("us-gov-west-1", factory.Region);
+        Assert.Equal("AWS/Bedrock", factory.Client.Namespace);
+        Assert.Equal(CloudWatchBedrockUsageProvider.MetricNames.Order(StringComparer.Ordinal), factory.Client.MetricNames.Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public async Task GetUsageAsync_CalculatesCostUsingConfiguredPricing()
     {
@@ -86,6 +120,40 @@ public sealed class CloudWatchBedrockUsageProviderTests
     private sealed class FakeFactory(Dictionary<string, double[]> metrics) : ICloudWatchBedrockClientFactory
     {
         public ICloudWatchBedrockMetricsClient Create(string region) => new FakeClient(metrics);
+    }
+
+    private sealed class CapturingFactory(Dictionary<string, double[]> metrics) : ICloudWatchBedrockClientFactory
+    {
+        public string? Region { get; private set; }
+        public CapturingClient Client { get; } = new(metrics);
+
+        public ICloudWatchBedrockMetricsClient Create(string region)
+        {
+            Region = region;
+            return Client;
+        }
+    }
+
+    private sealed class CapturingClient(Dictionary<string, double[]> metrics) : ICloudWatchBedrockMetricsClient
+    {
+        public string? Namespace { get; private set; }
+        public IReadOnlyList<string> MetricNames { get; private set; } = [];
+
+        public Task<GetMetricDataResponse> GetMetricDataAsync(GetMetricDataRequest request, CancellationToken cancellationToken)
+        {
+            Namespace = request.MetricDataQueries.First().MetricStat.Metric.Namespace;
+            MetricNames = request.MetricDataQueries.Select(query => query.MetricStat.Metric.MetricName).ToArray();
+            var results = request.MetricDataQueries.Select(query =>
+            {
+                var values = metrics.GetValueOrDefault(query.MetricStat.Metric.MetricName, []);
+                return new MetricDataResult { Id = query.Id, Values = values.ToList() };
+            }).ToList();
+            return Task.FromResult(new GetMetricDataResponse { MetricDataResults = results });
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class FakeClient(Dictionary<string, double[]> metrics) : ICloudWatchBedrockMetricsClient

@@ -12,7 +12,7 @@ public sealed class UsageDashboardDbContext(DbContextOptions<UsageDashboardDbCon
     {
         modelBuilder.Entity<UsageSnapshot>(entity =>
         {
-            entity.HasIndex(x => new { x.Provider, x.Region, x.ModelId, x.WindowStart, x.WindowEnd });
+            entity.HasIndex(x => new { x.Provider, x.Region, x.ModelId, x.WindowStart, x.WindowEnd }).IsUnique();
             entity.Property(x => x.Provider).HasMaxLength(100);
             entity.Property(x => x.Region).HasMaxLength(100);
             entity.Property(x => x.ModelId).HasMaxLength(200);

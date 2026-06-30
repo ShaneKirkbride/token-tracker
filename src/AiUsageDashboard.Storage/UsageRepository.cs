@@ -21,7 +21,30 @@ public sealed class EfUsageSnapshotRepository(UsageDashboardDbContext dbContext)
             return;
         }
 
-        await dbContext.UsageSnapshots.AddRangeAsync(snapshots, cancellationToken);
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await dbContext.UsageSnapshots.FirstOrDefaultAsync(x =>
+                x.Provider == snapshot.Provider
+                && x.Region == snapshot.Region
+                && x.ModelId == snapshot.ModelId
+                && x.WindowStart == snapshot.WindowStart
+                && x.WindowEnd == snapshot.WindowEnd, cancellationToken);
+
+            if (existing is null)
+            {
+                await dbContext.UsageSnapshots.AddAsync(snapshot, cancellationToken);
+                continue;
+            }
+
+            existing.ModelAlias = snapshot.ModelAlias;
+            existing.InputTokens = snapshot.InputTokens;
+            existing.OutputTokens = snapshot.OutputTokens;
+            existing.CachedInputTokens = snapshot.CachedInputTokens;
+            existing.Requests = snapshot.Requests;
+            existing.EstimatedCostUsd = snapshot.EstimatedCostUsd;
+            existing.CapturedAt = snapshot.CapturedAt;
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

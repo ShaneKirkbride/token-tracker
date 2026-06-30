@@ -55,10 +55,13 @@ builder.Services.AddOptions<GatewayUsageProviderOptions>().Configure<IOptions<Pr
 });
 builder.Services.AddOptions<AwsBedrockUsageProviderOptions>().Configure<IOptions<ProviderOptions>, IOptions<ApprovedModelsOptions>, IOptions<ModelPricingOptions>>((aws, providers, providerModels, pricing) =>
 {
-    aws.Enabled = providers.Value.AwsBedrock.Enabled;
-    aws.AllowedProviders = providers.Value.AwsBedrock.AllowedProviders;
-    aws.AllowedRegions = providers.Value.AwsBedrock.AllowedRegions;
-    aws.AllowedModels = providers.Value.AwsBedrock.AllowedModels;
+    var cloudWatch = providers.Value.CloudWatchBedrock.Enabled ? providers.Value.CloudWatchBedrock : providers.Value.AwsBedrock;
+    aws.Enabled = cloudWatch.Enabled;
+    aws.Region = cloudWatch.Region;
+    aws.Namespace = cloudWatch.Namespace;
+    aws.AllowedProviders = cloudWatch.AllowedProviders;
+    aws.AllowedRegions = cloudWatch.AllowedRegions.Length > 0 ? cloudWatch.AllowedRegions : [cloudWatch.Region];
+    aws.AllowedModels = cloudWatch.AllowedModels;
     aws.ApprovedModels = providerModels.Value.Models.Select(model => new ApprovedModel(model.Provider, model.Region, model.ModelId, model.Alias, model.IsApproved, model.IsGovCloud, model.EnvironmentTag)).ToArray();
     aws.ModelPrices = pricing.Value.Prices.Select(price => new ModelPrice(price.Provider, price.ModelId, price.InputPer1MTokensUsd, price.OutputPer1MTokensUsd, price.CachedInputPer1MTokensUsd)).ToArray();
 });
@@ -77,11 +80,7 @@ builder.Services.AddOptions<GoogleVertexUsageProviderOptions>().Configure<IOptio
     google.AllowedModels = providers.Value.GoogleVertex.AllowedModels;
 });
 
-builder.Services.AddHttpClient<IAiUsageProvider, GatewayUsageProvider>();
-builder.Services.AddSingleton<ICloudWatchBedrockClientFactory, CloudWatchBedrockClientFactory>();
-builder.Services.AddSingleton<IAiUsageProvider, CloudWatchBedrockUsageProvider>();
-builder.Services.AddSingleton<IAiUsageProvider, AzureOpenAiUsageProvider>();
-builder.Services.AddSingleton<IAiUsageProvider, GoogleVertexUsageProvider>();
+builder.Services.AddConfiguredUsageProviders(builder.Configuration);
 builder.Services.AddHostedService<UsagePollingService>();
 
 var security = builder.Configuration.GetSection(SecurityOptions.SectionName).Get<SecurityOptions>() ?? new SecurityOptions();

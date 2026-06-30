@@ -59,11 +59,23 @@
                                                          },
                                                          {
                                                              "name":  "Providers__Gateway__Enabled",
-                                                             "value":  "true"
+                                                             "value":  "false"
                                                          },
                                                          {
                                                              "name":  "Polling__LookbackMinutes",
-                                                             "value":  "60"
+                                                             "value":  "10080"
+                                                         },
+                                                         {
+                                                             "name":  "Providers__CloudWatchBedrock__Enabled",
+                                                             "value":  "true"
+                                                         },
+                                                         {
+                                                             "name":  "Providers__CloudWatchBedrock__Region",
+                                                             "value":  "us-gov-west-1"
+                                                         },
+                                                         {
+                                                             "name":  "Providers__CloudWatchBedrock__Namespace",
+                                                             "value":  "AWS/Bedrock"
                                                          }
                                                      ],
                                      "mountPoints":  [
