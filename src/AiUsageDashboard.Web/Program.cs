@@ -53,12 +53,14 @@ builder.Services.AddOptions<GatewayUsageProviderOptions>().Configure<IOptions<Pr
     gateway.BaseUrl = providers.Value.Gateway.BaseUrl;
     gateway.Enabled = providers.Value.Gateway.Enabled;
 });
-builder.Services.AddOptions<AwsBedrockUsageProviderOptions>().Configure<IOptions<ProviderOptions>>((aws, providers) =>
+builder.Services.AddOptions<AwsBedrockUsageProviderOptions>().Configure<IOptions<ProviderOptions>, IOptions<ApprovedModelsOptions>, IOptions<ModelPricingOptions>>((aws, providers, providerModels, pricing) =>
 {
     aws.Enabled = providers.Value.AwsBedrock.Enabled;
     aws.AllowedProviders = providers.Value.AwsBedrock.AllowedProviders;
     aws.AllowedRegions = providers.Value.AwsBedrock.AllowedRegions;
     aws.AllowedModels = providers.Value.AwsBedrock.AllowedModels;
+    aws.ApprovedModels = providerModels.Value.Models.Select(model => new ApprovedModel(model.Provider, model.Region, model.ModelId, model.Alias, model.IsApproved, model.IsGovCloud, model.EnvironmentTag)).ToArray();
+    aws.ModelPrices = pricing.Value.Prices.Select(price => new ModelPrice(price.Provider, price.ModelId, price.InputPer1MTokensUsd, price.OutputPer1MTokensUsd, price.CachedInputPer1MTokensUsd)).ToArray();
 });
 builder.Services.AddOptions<AzureOpenAiUsageProviderOptions>().Configure<IOptions<ProviderOptions>>((azure, providers) =>
 {
@@ -76,7 +78,8 @@ builder.Services.AddOptions<GoogleVertexUsageProviderOptions>().Configure<IOptio
 });
 
 builder.Services.AddHttpClient<IAiUsageProvider, GatewayUsageProvider>();
-builder.Services.AddSingleton<IAiUsageProvider, AwsBedrockUsageProvider>();
+builder.Services.AddSingleton<ICloudWatchBedrockClientFactory, CloudWatchBedrockClientFactory>();
+builder.Services.AddSingleton<IAiUsageProvider, CloudWatchBedrockUsageProvider>();
 builder.Services.AddSingleton<IAiUsageProvider, AzureOpenAiUsageProvider>();
 builder.Services.AddSingleton<IAiUsageProvider, GoogleVertexUsageProvider>();
 builder.Services.AddHostedService<UsagePollingService>();
@@ -126,10 +129,6 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
-
-var app = builder.Build();
-
-
 
 app.MapGet("/admin/export.csv", async (DateTimeOffset from, DateTimeOffset to, IDashboardQueryService dashboard, ICsvExportService csv, CancellationToken cancellationToken) =>
 {
