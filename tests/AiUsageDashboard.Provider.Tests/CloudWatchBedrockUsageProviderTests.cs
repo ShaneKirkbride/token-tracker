@@ -15,7 +15,7 @@ public sealed class CloudWatchBedrockUsageProviderTests
     [Fact]
     public async Task GetUsageAsync_MapsCloudWatchMetricsToAiUsageRecord()
     {
-        var provider = CreateProvider(new Dictionary<string, double[]> { ["InputTokenCount"] = [100], ["OutputTokenCount"] = [50], ["Invocations"] = [3], ["CachedInputTokenCount"] = [20] });
+        var provider = CreateProvider(new Dictionary<string, double[]?> { ["InputTokenCount"] = [100], ["OutputTokenCount"] = [50], ["Invocations"] = [3], ["CachedInputTokenCount"] = [20] });
 
         var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
 
@@ -33,7 +33,7 @@ public sealed class CloudWatchBedrockUsageProviderTests
     [Fact]
     public async Task GetUsageAsync_TreatsMissingMetricsAsZeroAndSkipsEmptyModels()
     {
-        var provider = CreateProvider(new Dictionary<string, double[]> { ["Invocations"] = [2] });
+        var provider = CreateProvider(new Dictionary<string, double[]?> { ["Invocations"] = [2] });
 
         var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
 
@@ -44,11 +44,87 @@ public sealed class CloudWatchBedrockUsageProviderTests
     }
 
     [Fact]
+    public async Task GetUsageAsync_TreatsNullMetricValuesAsZero()
+    {
+        var provider = CreateProvider(new Dictionary<string, double[]?>
+        {
+            ["InputTokenCount"] = null,
+            ["OutputTokenCount"] = [25],
+            ["Invocations"] = [1]
+        });
+
+        var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
+
+        var record = Assert.Single(records);
+        Assert.Equal(0, record.InputTokens);
+        Assert.Equal(25, record.OutputTokens);
+        Assert.Equal(1, record.Requests);
+    }
+
+    [Fact]
+    public async Task GetUsageAsync_TreatsEmptyMetricValuesAsZero()
+    {
+        var provider = CreateProvider(new Dictionary<string, double[]?>
+        {
+            ["InputTokenCount"] = [],
+            ["OutputTokenCount"] = [25],
+            ["Invocations"] = [1]
+        });
+
+        var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
+
+        var record = Assert.Single(records);
+        Assert.Equal(0, record.InputTokens);
+        Assert.Equal(25, record.OutputTokens);
+        Assert.Equal(1, record.Requests);
+    }
+
+    [Fact]
+    public async Task GetUsageAsync_MissingCacheMetricsDoNotPreventUsageRecord()
+    {
+        var provider = CreateProvider(new Dictionary<string, double[]?>
+        {
+            ["InputTokenCount"] = [100],
+            ["OutputTokenCount"] = [50],
+            ["Invocations"] = [2],
+            ["CacheReadInputTokenCount"] = null
+        });
+
+        var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
+
+        var record = Assert.Single(records);
+        Assert.Equal(100, record.InputTokens);
+        Assert.Equal(50, record.OutputTokens);
+        Assert.Equal(0, record.CachedInputTokens);
+        Assert.Equal(2, record.Requests);
+    }
+
+    [Fact]
+    public async Task GetUsageAsync_NoMetricDatapointsReturnsNoUsageRecord()
+    {
+        var provider = CreateProvider(new Dictionary<string, double[]?>());
+
+        var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
+
+        Assert.Empty(records);
+    }
+
+    [Fact]
+    public async Task GetUsageAsync_NoMetricDataResultsReturnsNoUsageRecord()
+    {
+        var provider = new CloudWatchBedrockUsageProvider(Options.Create(CreateOptions(["openai.gpt-oss-120b-1:0"])), new EmptyResultFactory(), new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
+
+        var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
+
+        Assert.Empty(records);
+    }
+
+    [Fact]
     public async Task GetUsageAsync_FiltersToApprovedAllowlistedJarvisModels()
     {
         var options = CreateOptions(["openai.gpt-oss-120b-1:0"]);
         options.ApprovedModels = [.. options.ApprovedModels, new ApprovedModel("aws-bedrock", "us-gov-west-1", "anthropic.claude-3-5-sonnet", "Not Jarvis", true, true, "Jarvis1")];
-        var provider = new CloudWatchBedrockUsageProvider(Options.Create(options), new FakeFactory(new Dictionary<string, double[]> { ["InputTokenCount"] = [10] }), new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
+        var provider = new CloudWatchBedrockUsageProvider(Options.Create(options), new FakeFactory(new Dictionary<string, double[]?> { ["InputTokenCount"] = [10] }), new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
 
         var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
 
@@ -67,7 +143,7 @@ public sealed class CloudWatchBedrockUsageProviderTests
             new ApprovedModel("aws-bedrock", "us-gov-west-1", "anthropic.claude-3-5-sonnet", "Not Jarvis", true, true, "Jarvis1"),
             new ApprovedModel("aws-bedrock", "us-gov-west-1", "amazon.titan", "Not Jarvis 2", true, true, "Jarvis1")
         ];
-        var provider = new CloudWatchBedrockUsageProvider(Options.Create(options), new FakeFactory(new Dictionary<string, double[]> { ["InputTokenCount"] = [10] }), new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
+        var provider = new CloudWatchBedrockUsageProvider(Options.Create(options), new FakeFactory(new Dictionary<string, double[]?> { ["InputTokenCount"] = [10] }), new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
 
         var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
 
@@ -93,7 +169,7 @@ public sealed class CloudWatchBedrockUsageProviderTests
     [Fact]
     public async Task GetUsageAsync_CalculatesCostUsingConfiguredPricing()
     {
-        var provider = CreateProvider(new Dictionary<string, double[]> { ["InputTokenCount"] = [1_000_000], ["OutputTokenCount"] = [500_000], ["Invocations"] = [1], ["CachedInputTokenCount"] = [100_000] });
+        var provider = CreateProvider(new Dictionary<string, double[]?> { ["InputTokenCount"] = [1_000_000], ["OutputTokenCount"] = [500_000], ["Invocations"] = [1], ["CachedInputTokenCount"] = [100_000] });
 
         var records = await provider.GetUsageAsync(From, To, CancellationToken.None);
 
@@ -101,7 +177,7 @@ public sealed class CloudWatchBedrockUsageProviderTests
         Assert.Equal(0.438m, record.EstimatedCostUsd);
     }
 
-    private static CloudWatchBedrockUsageProvider CreateProvider(Dictionary<string, double[]> metrics)
+    private static CloudWatchBedrockUsageProvider CreateProvider(Dictionary<string, double[]?> metrics)
         => new(Options.Create(CreateOptions(["openai.gpt-oss-120b-1:0"])), new FakeFactory(metrics), new TokenCostEstimator(), NullLogger<CloudWatchBedrockUsageProvider>.Instance);
 
     private static AwsBedrockUsageProviderOptions CreateOptions(string[] allowedModels) => new()
@@ -117,7 +193,7 @@ public sealed class CloudWatchBedrockUsageProviderTests
         ModelPrices = [new ModelPrice("aws-bedrock", "openai.gpt-oss-120b-1:0", 0.15m, 0.6m, 0.03m)]
     };
 
-    private sealed class FakeFactory(Dictionary<string, double[]> metrics) : ICloudWatchBedrockClientFactory
+    private sealed class FakeFactory(Dictionary<string, double[]?> metrics) : ICloudWatchBedrockClientFactory
     {
         public ICloudWatchBedrockMetricsClient Create(string region) => new FakeClient(metrics);
     }
@@ -156,17 +232,32 @@ public sealed class CloudWatchBedrockUsageProviderTests
         }
     }
 
-    private sealed class FakeClient(Dictionary<string, double[]> metrics) : ICloudWatchBedrockMetricsClient
+    private sealed class FakeClient(Dictionary<string, double[]?> metrics) : ICloudWatchBedrockMetricsClient
     {
         public Task<GetMetricDataResponse> GetMetricDataAsync(GetMetricDataRequest request, CancellationToken cancellationToken)
         {
             var results = request.MetricDataQueries.Select(query =>
             {
                 var values = metrics.GetValueOrDefault(query.MetricStat.Metric.MetricName, []);
-                return new MetricDataResult { Id = query.Id, Values = values.ToList() };
+                return new MetricDataResult { Id = query.Id, Values = values?.ToList() };
             }).ToList();
             return Task.FromResult(new GetMetricDataResponse { MetricDataResults = results });
         }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class EmptyResultFactory : ICloudWatchBedrockClientFactory
+    {
+        public ICloudWatchBedrockMetricsClient Create(string region) => new EmptyResultClient();
+    }
+
+    private sealed class EmptyResultClient : ICloudWatchBedrockMetricsClient
+    {
+        public Task<GetMetricDataResponse> GetMetricDataAsync(GetMetricDataRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(new GetMetricDataResponse { MetricDataResults = null });
 
         public void Dispose()
         {
