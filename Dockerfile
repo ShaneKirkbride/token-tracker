@@ -6,6 +6,15 @@ RUN dotnet publish src/AiUsageDashboard.Web/AiUsageDashboard.Web.csproj -c Relea
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
+USER root
+
+COPY certs/jarvis-gateway-ca-bundle.crt /usr/local/share/ca-certificates/jarvis-gateway-ca-bundle.crt
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 COPY --from=build /app/publish .

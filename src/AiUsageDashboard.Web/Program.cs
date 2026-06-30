@@ -127,10 +127,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-var app = builder.Build();
-
-
-
 app.MapGet("/admin/export.csv", async (DateTimeOffset from, DateTimeOffset to, IDashboardQueryService dashboard, ICsvExportService csv, CancellationToken cancellationToken) =>
 {
     var data = await dashboard.GetDashboardAsync(from, to, cancellationToken);

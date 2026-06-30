@@ -1,0 +1,17 @@
+{
+    "Comment":  "Alias jarvis-ai-gateway.aigov.keysight.com to internal Jarvis AI Gateway ALB",
+    "Changes":  [
+                    {
+                        "Action":  "UPSERT",
+                        "ResourceRecordSet":  {
+                                                  "Name":  "jarvis-ai-gateway.aigov.keysight.com",
+                                                  "Type":  "A",
+                                                  "AliasTarget":  {
+                                                                      "HostedZoneId":  "Z33AYJ8TM3BH4J",
+                                                                      "DNSName":  "dualstack.internal-jarvis-pilot-ai-gateway-alb-1081157028.us-gov-west-1.elb.amazonaws.com",
+                                                                      "EvaluateTargetHealth":  false
+                                                                  }
+                                              }
+                    }
+                ]
+}

@@ -1,0 +1,289 @@
+{
+    "Metrics": [
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "Invocations",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "nvidia.nemotron-super-3-120b"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "TimeToFirstToken",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "nvidia.nemotron-super-3-120b"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InvocationLatency",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "nvidia.nemotron-super-3-120b"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "EstimatedTPMQuotaUsage",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "nvidia.nemotron-super-3-120b"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "nvidia.nemotron-super-3-120b"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "OutputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "nvidia.nemotron-super-3-120b"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InvocationClientErrors",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "openai.gpt-oss-120b-1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InvocationClientErrors",
+            "Dimensions": []
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InputTokenCount",
+            "Dimensions": []
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "Invocations",
+            "Dimensions": []
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "EstimatedTPMQuotaUsage",
+            "Dimensions": []
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "OutputTokenCount",
+            "Dimensions": []
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InvocationLatency",
+            "Dimensions": []
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "Invocations",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "openai.gpt-oss-120b-1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "TimeToFirstToken",
+            "Dimensions": []
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "openai.gpt-oss-120b-1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "EstimatedTPMQuotaUsage",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "openai.gpt-oss-120b-1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "OutputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "openai.gpt-oss-120b-1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InvocationLatency",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "openai.gpt-oss-120b-1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "EstimatedTPMQuotaUsage",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "amazon.nova-pro-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InvocationLatency",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "amazon.nova-pro-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "Invocations",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "amazon.nova-pro-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "TimeToFirstToken",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "amazon.nova-pro-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "OutputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "amazon.nova-pro-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "amazon.nova-pro-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "OutputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "meta.llama3-70b-instruct-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InputTokenCount",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "meta.llama3-70b-instruct-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "EstimatedTPMQuotaUsage",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "meta.llama3-70b-instruct-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "TimeToFirstToken",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "meta.llama3-70b-instruct-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "Invocations",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "meta.llama3-70b-instruct-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "InvocationLatency",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "meta.llama3-70b-instruct-v1:0"
+                }
+            ]
+        },
+        {
+            "Namespace": "AWS/Bedrock",
+            "MetricName": "TimeToFirstToken",
+            "Dimensions": [
+                {
+                    "Name": "ModelId",
+                    "Value": "openai.gpt-oss-120b-1:0"
+                }
+            ]
+        }
+    ]
+}
