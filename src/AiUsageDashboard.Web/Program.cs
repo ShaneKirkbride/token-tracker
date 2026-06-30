@@ -8,11 +8,11 @@ using AiUsageDashboard.Storage;
 using AiUsageDashboard.Web.Components;
 using AiUsageDashboard.Web.Configuration;
 using AiUsageDashboard.Web.Services;
-using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -103,8 +103,12 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
-app.MapGet("/healthz", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
-
+app.MapGet("/healthz", () => Results.Ok(new
+{
+    status = "ok",
+    app = "AiUsageDashboard",
+    timestampUtc = DateTimeOffset.UtcNow
+})).AllowAnonymous();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<UsageDashboardDbContext>();
@@ -122,6 +126,10 @@ app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
+
+var app = builder.Build();
+
+
 
 app.MapGet("/admin/export.csv", async (DateTimeOffset from, DateTimeOffset to, IDashboardQueryService dashboard, ICsvExportService csv, CancellationToken cancellationToken) =>
 {

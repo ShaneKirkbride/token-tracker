@@ -1,0 +1,58 @@
+{
+    "family":  "jarvis-pilot-token-tracker",
+    "networkMode":  "awsvpc",
+    "requiresCompatibilities":  [
+                                    "FARGATE"
+                                ],
+    "cpu":  "512",
+    "memory":  "1024",
+    "executionRoleArn":  "arn:aws-us-gov:iam::660264611488:role/jarvis-pilot-openwebui-execution-role",
+    "taskRoleArn":  "arn:aws-us-gov:iam::660264611488:role/jarvis-pilot-openwebui-task-role",
+    "containerDefinitions":  [
+                                 {
+                                     "name":  "token-tracker",
+                                     "image":  "660264611488.dkr.ecr.us-gov-west-1.amazonaws.com/jarvis-token-tracker:pilot-20260629-001",
+                                     "essential":  true,
+                                     "portMappings":  [
+                                                          {
+                                                              "containerPort":  8080,
+                                                              "protocol":  "tcp"
+                                                          }
+                                                      ],
+                                     "environment":  [
+                                                         {
+                                                             "name":  "ASPNETCORE_ENVIRONMENT",
+                                                             "value":  "Development"
+                                                         },
+                                                         {
+                                                             "name":  "ASPNETCORE_URLS",
+                                                             "value":  "http://0.0.0.0:8080"
+                                                         },
+                                                         {
+                                                             "name":  "Polling__Enabled",
+                                                             "value":  "true"
+                                                         },
+                                                         {
+                                                             "name":  "Polling__IntervalMinutes",
+                                                             "value":  "1"
+                                                         },
+                                                         {
+                                                             "name":  "Polling__LookbackMinutes",
+                                                             "value":  "1440"
+                                                         },
+                                                         {
+                                                             "name":  "ConnectionStrings__UsageDashboard",
+                                                             "value":  "Data Source=/tmp/usage-dashboard.db"
+                                                         }
+                                                     ],
+                                     "logConfiguration":  {
+                                                              "logDriver":  "awslogs",
+                                                              "options":  {
+                                                                              "awslogs-group":  "/jarvis/token-tracker",
+                                                                              "awslogs-region":  "us-gov-west-1",
+                                                                              "awslogs-stream-prefix":  "ecs"
+                                                                          }
+                                                          }
+                                 }
+                             ]
+}
