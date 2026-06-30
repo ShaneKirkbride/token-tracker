@@ -1,3 +1,4 @@
+using AiUsageDashboard.Contracts;
 using AiUsageDashboard.Core;
 using AiUsageDashboard.Storage;
 using AiUsageDashboard.Web.Configuration;
@@ -5,7 +6,7 @@ using Microsoft.Extensions.Options;
 
 namespace AiUsageDashboard.Web.Services;
 
-public sealed class UsagePollingService(IServiceScopeFactory scopeFactory, IOptions<PollingOptions> options, ILogger<UsagePollingService> logger) : BackgroundService
+public sealed class UsagePollingService(IServiceScopeFactory scopeFactory, IOptions<PollingOptions> options, IEnumerable<IAiUsageProvider> providers, ILogger<UsagePollingService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -14,6 +15,10 @@ public sealed class UsagePollingService(IServiceScopeFactory scopeFactory, IOpti
             logger.LogInformation("Usage polling is disabled by configuration.");
             return;
         }
+
+        var polling = options.Value;
+        var enabledProviders = providers.Select(provider => provider.ProviderName).ToArray();
+        logger.LogInformation("Usage polling enabled with interval {IntervalMinutes} minutes, lookback {LookbackMinutes} minutes, and providers {Providers}.", polling.IntervalMinutes, polling.LookbackMinutes, enabledProviders.Length == 0 ? "none" : string.Join(",", enabledProviders));
 
         await PollOnceAsync(stoppingToken);
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(options.Value.IntervalMinutes));

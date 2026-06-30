@@ -3,6 +3,9 @@ using AiUsageDashboard.Providers.Mock;
 using AiUsageDashboard.Web.Configuration;
 using AiUsageDashboard.Web.Services;
 using Microsoft.Extensions.Configuration;
+using System.ComponentModel.DataAnnotations;
+using AiUsageDashboard.Providers.AwsBedrock;
+using AiUsageDashboard.Providers.Gateway;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -79,6 +82,69 @@ public sealed class CsvAndOptionsTests
         services.AddMockUsageProviderIfEnabled(configuration);
 
         Assert.Equal(expectedCount, services.Count(descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(MockUsageProvider)));
+    }
+
+    [Fact]
+    public void PollingOptions_AcceptsSevenDayLookback()
+    {
+        var options = new PollingOptions { LookbackMinutes = 10080 };
+
+        var results = Validate(options);
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void PollingOptions_RejectsLookbackOverSevenDays()
+    {
+        var options = new PollingOptions { LookbackMinutes = 10081 };
+
+        var results = Validate(options);
+
+        Assert.NotEmpty(results);
+    }
+
+    [Fact]
+    public void AddConfiguredUsageProviders_RegistersCloudWatchBedrockFromPrimarySectionOnly()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{ProviderOptions.SectionName}:CloudWatchBedrock:Enabled"] = "true",
+                [$"{ProviderOptions.SectionName}:CloudWatchBedrock:Region"] = "us-gov-west-1",
+                [$"{ProviderOptions.SectionName}:Gateway:Enabled"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddConfiguredUsageProviders(configuration);
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(CloudWatchBedrockUsageProvider));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(GatewayUsageProvider));
+    }
+
+    [Fact]
+    public void AddConfiguredUsageProviders_DoesNotRegisterGatewayWhenDisabled()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{ProviderOptions.SectionName}:Gateway:Enabled"] = "false",
+                [$"{ProviderOptions.SectionName}:CloudWatchBedrock:Enabled"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddConfiguredUsageProviders(configuration);
+
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(GatewayUsageProvider));
+    }
+
+    private static IReadOnlyList<ValidationResult> Validate(object options)
+    {
+        var results = new List<ValidationResult>();
+        Validator.TryValidateObject(options, new ValidationContext(options), results, validateAllProperties: true);
+        return results;
     }
 
 }

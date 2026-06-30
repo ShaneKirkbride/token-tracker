@@ -11,6 +11,8 @@ namespace AiUsageDashboard.Providers.AwsBedrock;
 public sealed class AwsBedrockUsageProviderOptions
 {
     public bool Enabled { get; set; }
+    public string Region { get; set; } = "us-gov-west-1";
+    public string Namespace { get; set; } = "AWS/Bedrock";
     public string[] AllowedProviders { get; set; } = [];
     public string[] AllowedRegions { get; set; } = [];
     public string[] AllowedModels { get; set; } = [];
@@ -46,7 +48,7 @@ public class CloudWatchBedrockUsageProvider(
     TokenCostEstimator costEstimator,
     ILogger<CloudWatchBedrockUsageProvider> logger) : IAiUsageProvider
 {
-    private const string MetricNamespace = "AWS/Bedrock";
+    public static readonly string[] MetricNames = ["InputTokenCount", "OutputTokenCount", "Invocations", "CacheReadInputTokenCount", "CachedInputTokenCount", "InputTokenCountFromCache"];
     private static readonly string[] CacheMetricNames = ["CacheReadInputTokenCount", "CachedInputTokenCount", "InputTokenCountFromCache"];
 
     public string ProviderName => "aws-bedrock";
@@ -61,6 +63,7 @@ public class CloudWatchBedrockUsageProvider(
         }
 
         var approvedModels = GetApprovedModels(providerOptions).ToArray();
+        logger.LogInformation("CloudWatch Bedrock polling active in region {Region} with namespace {Namespace}, {ApprovedModelCount} approved models, and metrics {MetricNames}.", providerOptions.Region, providerOptions.Namespace, approvedModels.Length, string.Join(",", MetricNames));
         if (approvedModels.Length == 0)
         {
             logger.LogWarning("{ProviderName} provider is enabled but has no approved Bedrock models to query.", ProviderName);
@@ -68,12 +71,12 @@ public class CloudWatchBedrockUsageProvider(
         }
 
         var records = new List<AiUsageRecord>();
-        foreach (var regionGroup in approvedModels.GroupBy(model => model.Region, StringComparer.OrdinalIgnoreCase))
+        foreach (var regionGroup in approvedModels.GroupBy(model => string.IsNullOrWhiteSpace(providerOptions.Region) ? model.Region : providerOptions.Region, StringComparer.OrdinalIgnoreCase))
         {
             using var cloudWatch = cloudWatchClientFactory.Create(regionGroup.Key);
             foreach (var model in regionGroup)
             {
-                var record = await GetModelUsageAsync(cloudWatch, model, providerOptions.ModelPrices, from, to, cancellationToken);
+                var record = await GetModelUsageAsync(cloudWatch, model, providerOptions.Namespace, providerOptions.ModelPrices, from, to, cancellationToken);
                 if (record is not null)
                 {
                     records.Add(record);
@@ -87,12 +90,13 @@ public class CloudWatchBedrockUsageProvider(
     private async Task<AiUsageRecord?> GetModelUsageAsync(
         ICloudWatchBedrockMetricsClient cloudWatch,
         ApprovedModel model,
+        string metricNamespace,
         IReadOnlyCollection<ModelPrice> prices,
         DateTimeOffset from,
         DateTimeOffset to,
         CancellationToken cancellationToken)
     {
-        var metricValues = await GetMetricValuesAsync(cloudWatch, model.ModelId, from, to, cancellationToken);
+        var metricValues = await GetMetricValuesAsync(cloudWatch, model.ModelId, metricNamespace, from, to, cancellationToken);
         var inputTokens = metricValues.GetValueOrDefault("InputTokenCount");
         var outputTokens = metricValues.GetValueOrDefault("OutputTokenCount");
         var requests = metricValues.GetValueOrDefault("Invocations");
@@ -125,11 +129,12 @@ public class CloudWatchBedrockUsageProvider(
     private static async Task<IReadOnlyDictionary<string, long>> GetMetricValuesAsync(
         ICloudWatchBedrockMetricsClient cloudWatch,
         string modelId,
+        string metricNamespace,
         DateTimeOffset from,
         DateTimeOffset to,
         CancellationToken cancellationToken)
     {
-        var metricNames = new[] { "InputTokenCount", "OutputTokenCount", "Invocations" }.Concat(CacheMetricNames).ToArray();
+        var metricNames = MetricNames;
         var request = new GetMetricDataRequest
         {
             StartTime = from.UtcDateTime,
@@ -145,7 +150,7 @@ public class CloudWatchBedrockUsageProvider(
                     Stat = "Sum",
                     Metric = new Metric
                     {
-                        Namespace = MetricNamespace,
+                        Namespace = metricNamespace,
                         MetricName = metricName,
                         Dimensions = [new Dimension { Name = "ModelId", Value = modelId }]
                     }
@@ -165,6 +170,10 @@ public class CloudWatchBedrockUsageProvider(
     {
         var allowedModels = options.AllowedModels.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var allowedRegions = options.AllowedRegions.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (allowedRegions.Count == 0 && !string.IsNullOrWhiteSpace(options.Region))
+        {
+            allowedRegions.Add(options.Region);
+        }
         return options.ApprovedModels.Where(model => model.IsApproved
             && string.Equals(model.Provider, "aws-bedrock", StringComparison.OrdinalIgnoreCase)
             && (allowedModels.Count == 0 || allowedModels.Contains(model.ModelId))
