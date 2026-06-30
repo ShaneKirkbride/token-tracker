@@ -115,6 +115,9 @@ public sealed class UsageRepositoryTests : IDisposable
 
         var row = Assert.Single(data.Records);
         Assert.Equal("Jarvis Chat", row.ModelAlias);
+        Assert.Equal("openai.gpt-oss-120b-1:0", row.ModelId);
+        Assert.Equal(3m, data.Summary.CostByModel["openai.gpt-oss-120b-1:0"]);
+        Assert.DoesNotContain("Jarvis Chat", data.Summary.CostByModel.Keys);
         Assert.Equal(20, row.InputTokens);
         Assert.Equal(10, row.OutputTokens);
         Assert.Equal(6, row.CachedInputTokens);
@@ -125,6 +128,32 @@ public sealed class UsageRepositoryTests : IDisposable
         Assert.DoesNotContain("azure-openai", data.Summary.CostByProvider.Keys);
     }
 
+
+
+    [Fact]
+    public async Task GetDashboardAsync_GroupsModelSummaryByModelIdWhenAliasesExist()
+    {
+        await using var db = CreateDbContext();
+        await db.Database.EnsureCreatedAsync(CancellationToken.None);
+        var repository = new EfUsageSnapshotRepository(db);
+        await repository.StoreAsync([
+            Record("aws-bedrock", "Jarvis Chat", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 0.07m, "openai.gpt-oss-120b-1:0"),
+            Record("aws-bedrock", "Jarvis Chat", DateTimeOffset.Parse("2026-06-01T01:00:00Z"), 0.03m, "openai.gpt-oss-120b-1:0"),
+            Record("aws-bedrock", "Llama 3 70B", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 0.01m, "meta.llama3-70b-instruct-v1:0")
+        ], DateTimeOffset.UtcNow, CancellationToken.None);
+        var service = new DashboardQueryService(repository, new ApprovedModelPolicy([
+            new ApprovedModel("aws-bedrock", "region", "openai.gpt-oss-120b-1:0", "Jarvis Chat", true, true, "Jarvis1"),
+            new ApprovedModel("aws-bedrock", "region", "meta.llama3-70b-instruct-v1:0", "Llama 3 70B", true, true, "Jarvis1")
+        ]));
+
+        var data = await service.GetDashboardAsync(DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-02T00:00:00Z"), CancellationToken.None);
+
+        Assert.Equal(0.11m, data.Summary.EstimatedCostUsd);
+        Assert.Equal(["meta.llama3-70b-instruct-v1:0", "openai.gpt-oss-120b-1:0"], data.Summary.CostByModel.Keys.Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(["meta.llama3-70b-instruct-v1:0", "openai.gpt-oss-120b-1:0"], data.Records.Select(record => record.ModelId).Order(StringComparer.Ordinal).ToArray());
+        Assert.DoesNotContain("Jarvis Chat", data.Summary.CostByModel.Keys);
+        Assert.DoesNotContain("Llama 3 70B", data.Summary.CostByModel.Keys);
+    }
 
     [Fact]
     public async Task StoreAsync_ReplacesDuplicatePollingSnapshotsForSameWindow()

@@ -54,9 +54,9 @@ public sealed class UsageDashboardServiceTests
         var sut = new UsageDashboardService([]);
         var records = new[]
         {
-            Record("aws", "Model A", cost: 1.25m, requests: 2, input: 10, output: 20, cached: 3),
-            Record("aws", "Model B", cost: 2.25m, requests: 3, input: 100, output: 200, cached: 30),
-            Record("azure", "Model A", cost: 3.50m, requests: 4, input: 1, output: 2, cached: 0)
+            Record("aws", "Jarvis Chat", "openai.gpt-oss-120b-1:0", cost: 1.25m, requests: 2, input: 10, output: 20, cached: 3),
+            Record("aws", "Llama 3 70B", "meta.llama3-70b-instruct-v1:0", cost: 2.25m, requests: 3, input: 100, output: 200, cached: 30),
+            Record("azure", "Jarvis Chat", "openai.gpt-oss-120b-1:0", cost: 3.50m, requests: 4, input: 1, output: 2, cached: 0)
         };
 
         var summary = sut.Summarize(records);
@@ -66,12 +66,14 @@ public sealed class UsageDashboardServiceTests
         Assert.Equal(9, summary.TotalRequests);
         Assert.Equal(3.50m, summary.CostByProvider["aws"]);
         Assert.Equal(3.50m, summary.CostByProvider["azure"]);
-        Assert.Equal(4.75m, summary.CostByModel["Model A"]);
-        Assert.Equal(2.25m, summary.CostByModel["Model B"]);
+        Assert.Equal(4.75m, summary.CostByModel["openai.gpt-oss-120b-1:0"]);
+        Assert.Equal(2.25m, summary.CostByModel["meta.llama3-70b-instruct-v1:0"]);
+        Assert.DoesNotContain("Jarvis Chat", summary.CostByModel.Keys);
+        Assert.DoesNotContain("Llama 3 70B", summary.CostByModel.Keys);
     }
 
-    private static AiUsageRecord Record(string provider, string alias, decimal cost = 0m, int requests = 1, long input = 1, long output = 1, long cached = 0) =>
-        new(provider, "region", alias.ToLowerInvariant().Replace(' ', '-'), alias, DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, input, output, cached, requests, cost);
+    private static AiUsageRecord Record(string provider, string alias, string? modelId = null, decimal cost = 0m, int requests = 1, long input = 1, long output = 1, long cached = 0) =>
+        new(provider, "region", modelId ?? alias.ToLowerInvariant().Replace(' ', '-'), alias, DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow, input, output, cached, requests, cost);
 
     private sealed class FailingProvider : IAiUsageProvider
     {

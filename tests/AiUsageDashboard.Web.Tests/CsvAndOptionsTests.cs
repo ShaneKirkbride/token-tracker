@@ -6,6 +6,8 @@ using Microsoft.Extensions.Configuration;
 using System.ComponentModel.DataAnnotations;
 using AiUsageDashboard.Providers.AwsBedrock;
 using AiUsageDashboard.Providers.Gateway;
+using AiUsageDashboard.Providers.AzureOpenAI;
+using AiUsageDashboard.Providers.GoogleVertex;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -67,6 +69,13 @@ public sealed class CsvAndOptionsTests
 
         Assert.Equal("$78.12", formatted);
         Assert.DoesNotContain("¤", formatted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsdCurrencyFormatter_ShowsTinyNonzeroCostsAsLessThanOneCent()
+    {
+        Assert.Equal("<$0.01", UsdCurrencyFormatter.Format(0.004m));
+        Assert.Equal("$0.00", UsdCurrencyFormatter.Format(0m));
     }
 
     [Theory]
@@ -138,6 +147,28 @@ public sealed class CsvAndOptionsTests
         services.AddConfiguredUsageProviders(configuration);
 
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(GatewayUsageProvider));
+    }
+
+
+    [Fact]
+    public void AddConfiguredUsageProviders_RegistersExplicitlyEnabledNonBedrockProviders()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{ProviderOptions.SectionName}:Gateway:Enabled"] = "true",
+                [$"{ProviderOptions.SectionName}:AzureOpenAi:Enabled"] = "true",
+                [$"{ProviderOptions.SectionName}:GoogleVertex:Enabled"] = "true",
+                [$"{ProviderOptions.SectionName}:CloudWatchBedrock:Enabled"] = "false"
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddConfiguredUsageProviders(configuration);
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationFactory is not null);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(AzureOpenAiUsageProvider));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(GoogleVertexUsageProvider));
     }
 
     private static IReadOnlyList<ValidationResult> Validate(object options)

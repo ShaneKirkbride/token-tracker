@@ -36,7 +36,7 @@ public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> provider
 
         return filteredResults
             .OrderBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.ModelAlias, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ModelId, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
@@ -48,6 +48,6 @@ public sealed class UsageDashboardService(IEnumerable<IAiUsageProvider> provider
             rows.Sum(x => x.InputTokens + x.OutputTokens + x.CachedInputTokens),
             rows.Sum(x => x.Requests),
             rows.GroupBy(x => x.Provider).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)),
-            rows.GroupBy(x => x.ModelAlias).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)));
+            rows.GroupBy(x => x.ModelId).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)));
     }
 }
