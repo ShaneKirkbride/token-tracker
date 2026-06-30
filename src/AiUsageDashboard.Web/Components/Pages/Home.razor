@@ -31,7 +31,7 @@
 else
 {
     <section class="cards">
-        <article class="metric"><span>Estimated cost</span><strong>@Usd(_data.Summary.EstimatedCostUsd)</strong><small>Estimated until billing reconciliation</small></article>
+        <article class="metric"><span>Estimated cost</span><strong>@Usd(_data.Summary.EstimatedCostUsd)</strong><small>Estimated from CloudWatch token metrics; reconcile with AWS billing/CUR.</small></article>
         <article class="metric"><span>Total tokens</span><strong>@Format(_data.Summary.TotalTokens)</strong><small>Input + output + cached</small></article>
         <article class="metric"><span>Total requests</span><strong>@_data.Summary.TotalRequests.ToString("N0")</strong><small>Metadata-only gateway calls</small></article>
     </section>
@@ -68,7 +68,7 @@ else
     <section class="panel table-panel">
         <div class="panel-title"><h2>Tokens by approved model</h2><span>Stacked input/output/cached</span></div>
         <div class="bars">
-            @foreach (var group in _data.Records.GroupBy(x => x.ModelAlias))
+            @foreach (var group in _data.Records.GroupBy(x => x.ModelId))
             {
                 var input = group.Sum(x => x.InputTokens);
                 var output = group.Sum(x => x.OutputTokens);
@@ -82,11 +82,11 @@ else
     <section class="panel table-panel">
         <div class="panel-title"><h2>Approved model usage</h2><span>Prompts/source text are never stored</span></div>
         <table>
-            <thead><tr><th>Provider</th><th>Region</th><th>Model</th><th>Input</th><th>Output</th><th>Cached</th><th>Requests</th><th>Est. cost</th></tr></thead>
+            <thead><tr><th>Provider</th><th>Region</th><th>Model ID</th><th>Input</th><th>Output</th><th>Cached</th><th>Requests</th><th>Est. cost</th></tr></thead>
             <tbody>
                 @foreach (var row in _data.Records)
                 {
-                    <tr><td><span class="pill">@row.Provider</span></td><td>@row.Region</td><td>@row.ModelAlias</td><td>@row.InputTokens.ToString("N0")</td><td>@row.OutputTokens.ToString("N0")</td><td>@row.CachedInputTokens.ToString("N0")</td><td>@row.Requests.ToString("N0")</td><td>@Usd(row.EstimatedCostUsd)</td></tr>
+                    <tr><td><span class="pill">@row.Provider</span></td><td>@row.Region</td><td>@row.ModelId</td><td>@row.InputTokens.ToString("N0")</td><td>@row.OutputTokens.ToString("N0")</td><td>@row.CachedInputTokens.ToString("N0")</td><td>@row.Requests.ToString("N0")</td><td>@Usd(row.EstimatedCostUsd)</td></tr>
                 }
             </tbody>
         </table>

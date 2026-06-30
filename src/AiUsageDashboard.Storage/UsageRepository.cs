@@ -54,7 +54,7 @@ public sealed class EfUsageSnapshotRepository(UsageDashboardDbContext dbContext)
         return rows
             .Where(x => x.WindowStart >= from && x.WindowEnd <= to)
             .OrderBy(x => x.Provider, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(x => x.ModelAlias, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.ModelId, StringComparer.OrdinalIgnoreCase)
             .Select(x => x.ToRecord())
             .ToArray();
     }
@@ -87,12 +87,12 @@ public sealed class DashboardQueryService(IUsageSnapshotRepository repository, A
     {
         var records = (await repository.QueryAsync(from, to, cancellationToken))
             .Where(record => approvedModelPolicy.IsApproved(record.Provider, record.Region, record.ModelId))
-            .GroupBy(record => new { record.Provider, record.Region, record.ModelId, record.ModelAlias })
+            .GroupBy(record => new { record.Provider, record.Region, record.ModelId })
             .Select(group => new AiUsageRecord(
                 group.Key.Provider,
                 group.Key.Region,
                 group.Key.ModelId,
-                group.Key.ModelAlias,
+                group.Select(record => record.ModelAlias).FirstOrDefault(alias => !string.IsNullOrWhiteSpace(alias)) ?? group.Key.ModelId,
                 group.Min(record => record.WindowStart),
                 group.Max(record => record.WindowEnd),
                 group.Sum(record => record.InputTokens),
@@ -101,7 +101,7 @@ public sealed class DashboardQueryService(IUsageSnapshotRepository repository, A
                 group.Sum(record => record.Requests),
                 group.Sum(record => record.EstimatedCostUsd)))
             .OrderBy(record => record.Provider, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(record => record.ModelAlias, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(record => record.ModelId, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var series = BuildCostOverTime(records);
         var summary = BuildSummary(records);
@@ -129,6 +129,6 @@ public sealed class DashboardQueryService(IUsageSnapshotRepository repository, A
             rows.Sum(x => x.InputTokens + x.OutputTokens + x.CachedInputTokens),
             rows.Sum(x => x.Requests),
             rows.GroupBy(x => x.Provider).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)),
-            rows.GroupBy(x => x.ModelAlias).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)));
+            rows.GroupBy(x => x.ModelId).ToDictionary(x => x.Key, x => x.Sum(r => r.EstimatedCostUsd)));
     }
 }
