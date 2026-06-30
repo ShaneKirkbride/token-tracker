@@ -16,6 +16,27 @@ public sealed class ApprovedModelPolicyTests
     }
 
     [Fact]
+    public void Filter_AllowsOnlyTwoJarvis1BedrockModels()
+    {
+        var sut = new ApprovedModelPolicy([
+            new ApprovedModel("aws-bedrock", "us-gov-west-1", "openai.gpt-oss-120b-1:0", "Jarvis Chat", true, true, "Jarvis1"),
+            new ApprovedModel("aws-bedrock", "us-gov-west-1", "meta.llama3-70b-instruct-v1:0", "Llama 3 70B", true, true, "Jarvis1")
+        ]);
+
+        var filtered = sut.Filter([
+            Record("aws-bedrock", "us-gov-west-1", "openai.gpt-oss-120b-1:0"),
+            Record("aws-bedrock", "us-gov-west-1", "meta.llama3-70b-instruct-v1:0"),
+            Record("aws-bedrock", "us-gov-west-1", "unapproved"),
+            Record("azure-openai", "usgovarizona", "deployment"),
+            Record("google-vertex", "us-central1", "gemini")
+        ]).ToArray();
+
+        Assert.Collection(filtered,
+            first => Assert.Equal("openai.gpt-oss-120b-1:0", first.ModelId),
+            second => Assert.Equal("meta.llama3-70b-instruct-v1:0", second.ModelId));
+    }
+
+    [Fact]
     public void IsApproved_ReturnsFalseForUnapprovedOrUnknownModel()
     {
         var sut = new ApprovedModelPolicy([
@@ -36,4 +57,7 @@ public sealed class ApprovedModelPolicyTests
 
         Assert.Throws<ArgumentException>(() => sut.IsApproved(provider, region, model));
     }
+
+    private static AiUsageRecord Record(string provider, string region, string modelId) =>
+        new(provider, region, modelId, modelId, DateTimeOffset.UtcNow.AddMinutes(-15), DateTimeOffset.UtcNow, 1, 1, 0, 1, 0.01m);
 }

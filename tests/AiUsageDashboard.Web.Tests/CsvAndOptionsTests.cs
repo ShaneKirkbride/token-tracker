@@ -1,6 +1,9 @@
 using AiUsageDashboard.Contracts;
+using AiUsageDashboard.Providers.Mock;
 using AiUsageDashboard.Web.Configuration;
 using AiUsageDashboard.Web.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace AiUsageDashboard.Web.Tests;
@@ -52,6 +55,30 @@ public sealed class CsvAndOptionsTests
     {
         var csv = new CsvExportService().ExportUsage([]);
         Assert.StartsWith("Provider,Region,ModelId", csv, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsdCurrencyFormatter_FormatsUsdWithoutGenericCurrencySymbol()
+    {
+        var formatted = UsdCurrencyFormatter.Format(78.12m);
+
+        Assert.Equal("$78.12", formatted);
+        Assert.DoesNotContain("¤", formatted, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, 0)]
+    [InlineData(true, 1)]
+    public void AddMockUsageProviderIfEnabled_RegistersMockOnlyWhenExplicitlyEnabled(bool enabled, int expectedCount)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [$"{ProviderOptions.SectionName}:Mock:Enabled"] = enabled.ToString() })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddMockUsageProviderIfEnabled(configuration);
+
+        Assert.Equal(expectedCount, services.Count(descriptor => descriptor.ServiceType == typeof(IAiUsageProvider) && descriptor.ImplementationType == typeof(MockUsageProvider)));
     }
 
 }

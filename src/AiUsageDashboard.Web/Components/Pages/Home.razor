@@ -2,18 +2,19 @@
 @rendermode InteractiveServer
 @using AiUsageDashboard.Contracts
 @using AiUsageDashboard.Storage
+@using AiUsageDashboard.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize(Policy = "Admin")]
 @inject IDashboardQueryService Dashboard
 @inject NavigationManager Navigation
 
-<PageTitle>Jarvis Usage Command Center</PageTitle>
+<PageTitle>Jarvis1 Bedrock Usage</PageTitle>
 
 <section class="hero">
     <div>
-        <p class="eyebrow">GovCloud-ready AI observability</p>
-        <h1>Jarvis Usage Command Center</h1>
-        <p class="subtitle">Approved model token usage, request volume, and estimated spend across operational gateway and cloud-provider telemetry.</p>
+        <p class="eyebrow">AWS GovCloud AI observability</p>
+        <h1>Jarvis1 Bedrock Usage</h1>
+        <p class="subtitle">Approved AWS Bedrock GovCloud model usage, request volume, and estimated spend from gateway telemetry.</p>
     </div>
     <div class="actions">
         <label>From <InputDate @bind-Value="_fromDate" /></label>
@@ -30,7 +31,7 @@
 else
 {
     <section class="cards">
-        <article class="metric"><span>Estimated cost</span><strong>@_data.Summary.EstimatedCostUsd.ToString("C")</strong><small>Estimated until billing reconciliation</small></article>
+        <article class="metric"><span>Estimated cost</span><strong>@Usd(_data.Summary.EstimatedCostUsd)</strong><small>Estimated until billing reconciliation</small></article>
         <article class="metric"><span>Total tokens</span><strong>@Format(_data.Summary.TotalTokens)</strong><small>Input + output + cached</small></article>
         <article class="metric"><span>Total requests</span><strong>@_data.Summary.TotalRequests.ToString("N0")</strong><small>Metadata-only gateway calls</small></article>
     </section>
@@ -41,13 +42,13 @@ else
             <div class="line-chart">
                 @foreach (var point in _data.CostOverTime.DefaultIfEmpty(new TimeSeriesPoint(DateOnly.FromDateTime(DateTime.UtcNow), 0, 0, 0)))
                 {
-                    <div class="line-point" style="height:@ChartHeight(point.CostUsd)"><span>@point.CostUsd.ToString("C")</span><small>@point.Date.ToString("MM-dd")</small></div>
+                    <div class="line-point" style="height:@ChartHeight(point.CostUsd)"><span>@Usd(point.CostUsd)</span><small>@point.Date.ToString("MM-dd")</small></div>
                 }
             </div>
         </article>
 
         <article class="panel">
-            <div class="panel-title"><h2>Provider split</h2><span>Estimated cost</span></div>
+            <div class="panel-title"><h2>Approved Bedrock split</h2><span>Estimated cost</span></div>
             <svg viewBox="0 0 180 180" role="img" aria-label="Provider cost donut chart" class="donut">
                 <circle cx="90" cy="90" r="58" class="donut-base" />
                 <circle cx="90" cy="90" r="58" class="donut-main" stroke-dasharray="@DonutDash" />
@@ -58,7 +59,7 @@ else
             <div class="legend">
                 @foreach (var item in _data.Summary.CostByProvider)
                 {
-                    <div><span></span>@item.Key <b>@item.Value.ToString("C")</b></div>
+                    <div><span></span>@item.Key <b>@Usd(item.Value)</b></div>
                 }
             </div>
         </article>
@@ -85,7 +86,7 @@ else
             <tbody>
                 @foreach (var row in _data.Records)
                 {
-                    <tr><td><span class="pill">@row.Provider</span></td><td>@row.Region</td><td>@row.ModelAlias</td><td>@row.InputTokens.ToString("N0")</td><td>@row.OutputTokens.ToString("N0")</td><td>@row.CachedInputTokens.ToString("N0")</td><td>@row.Requests.ToString("N0")</td><td>@row.EstimatedCostUsd.ToString("C")</td></tr>
+                    <tr><td><span class="pill">@row.Provider</span></td><td>@row.Region</td><td>@row.ModelAlias</td><td>@row.InputTokens.ToString("N0")</td><td>@row.OutputTokens.ToString("N0")</td><td>@row.CachedInputTokens.ToString("N0")</td><td>@row.Requests.ToString("N0")</td><td>@Usd(row.EstimatedCostUsd)</td></tr>
                 }
             </tbody>
         </table>
@@ -120,4 +121,5 @@ else
 
     private static string Percent(long value, long total) => $"{Math.Round(value * 100m / total, 2)}%";
     private static string Format(long value) => value >= 1_000_000 ? $"{value / 1_000_000m:N1}M" : value.ToString("N0");
+    private static string Usd(decimal value) => UsdCurrencyFormatter.Format(value);
 }

@@ -1,4 +1,5 @@
 using AiUsageDashboard.Contracts;
+using AiUsageDashboard.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace AiUsageDashboard.Storage;
@@ -57,24 +58,32 @@ public interface IDashboardQueryService
     Task<DashboardData> GetDashboardAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
 }
 
-public sealed class DashboardQueryService(IUsageSnapshotRepository repository, IEnumerable<IAiUsageProvider> providers) : IDashboardQueryService
+public sealed class DashboardQueryService(IUsageSnapshotRepository repository, ApprovedModelPolicy approvedModelPolicy) : IDashboardQueryService
 {
-    private readonly HashSet<string> _knownProviders = providers
-        .Select(x => x.ProviderName)
-        .Where(x => !string.IsNullOrWhiteSpace(x))
-        .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
     public async Task<DashboardData> GetDashboardAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
     {
         var records = (await repository.QueryAsync(from, to, cancellationToken))
-            .Where(IsKnownProvider)
+            .Where(record => approvedModelPolicy.IsApproved(record.Provider, record.Region, record.ModelId))
+            .GroupBy(record => new { record.Provider, record.Region, record.ModelId, record.ModelAlias })
+            .Select(group => new AiUsageRecord(
+                group.Key.Provider,
+                group.Key.Region,
+                group.Key.ModelId,
+                group.Key.ModelAlias,
+                group.Min(record => record.WindowStart),
+                group.Max(record => record.WindowEnd),
+                group.Sum(record => record.InputTokens),
+                group.Sum(record => record.OutputTokens),
+                group.Sum(record => record.CachedInputTokens),
+                group.Sum(record => record.Requests),
+                group.Sum(record => record.EstimatedCostUsd)))
+            .OrderBy(record => record.Provider, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(record => record.ModelAlias, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var series = BuildCostOverTime(records);
         var summary = BuildSummary(records);
         return new DashboardData(summary, records, series);
     }
-
-    private bool IsKnownProvider(AiUsageRecord record) => _knownProviders.Contains(record.Provider);
 
     public static IReadOnlyList<TimeSeriesPoint> BuildCostOverTime(IEnumerable<AiUsageRecord> records)
     {

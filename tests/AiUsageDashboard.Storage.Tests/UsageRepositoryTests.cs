@@ -1,4 +1,5 @@
 using AiUsageDashboard.Contracts;
+using AiUsageDashboard.Core;
 using AiUsageDashboard.Storage;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -65,7 +66,7 @@ public sealed class UsageRepositoryTests : IDisposable
         var repository = new EfUsageSnapshotRepository(db);
         await repository.StoreAsync([], DateTimeOffset.UtcNow, CancellationToken.None);
         await repository.StoreAsync([Record("aws", "Model A", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 1m)], DateTimeOffset.UtcNow, CancellationToken.None);
-        var service = new DashboardQueryService(repository, [new StubProvider("aws")]);
+        var service = new DashboardQueryService(repository, Policy("aws", "region", "model a"));
 
         var data = await service.GetDashboardAsync(DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-02T00:00:00Z"), CancellationToken.None);
 
@@ -84,7 +85,7 @@ public sealed class UsageRepositoryTests : IDisposable
             Record("aws", "Model A", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 1m),
             Record("unknown", "Model B", DateTimeOffset.Parse("2026-06-01T02:00:00Z"), 2m)
         ], DateTimeOffset.UtcNow, CancellationToken.None);
-        var service = new DashboardQueryService(repository, [new StubProvider("aws")]);
+        var service = new DashboardQueryService(repository, Policy("aws", "region", "model a"));
 
         var data = await service.GetDashboardAsync(DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-02T00:00:00Z"), CancellationToken.None);
 
@@ -96,12 +97,43 @@ public sealed class UsageRepositoryTests : IDisposable
         Assert.DoesNotContain("unknown", data.Summary.CostByProvider.Keys);
     }
 
+    [Fact]
+    public async Task GetDashboardAsync_FiltersAndAggregatesApprovedSnapshots()
+    {
+        await using var db = CreateDbContext();
+        await db.Database.EnsureCreatedAsync(CancellationToken.None);
+        var repository = new EfUsageSnapshotRepository(db);
+        await repository.StoreAsync([
+            Record("aws-bedrock", "Jarvis Chat", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 1m, "openai.gpt-oss-120b-1:0"),
+            Record("aws-bedrock", "Jarvis Chat", DateTimeOffset.Parse("2026-06-01T00:15:00Z"), 2m, "openai.gpt-oss-120b-1:0"),
+            Record("aws-bedrock", "Unapproved", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 5m, "unapproved"),
+            Record("azure-openai", "Azure", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 7m, "deployment")
+        ], DateTimeOffset.UtcNow, CancellationToken.None);
+        var service = new DashboardQueryService(repository, Policy("aws-bedrock", "region", "openai.gpt-oss-120b-1:0"));
+
+        var data = await service.GetDashboardAsync(DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-02T00:00:00Z"), CancellationToken.None);
+
+        var row = Assert.Single(data.Records);
+        Assert.Equal("Jarvis Chat", row.ModelAlias);
+        Assert.Equal(20, row.InputTokens);
+        Assert.Equal(10, row.OutputTokens);
+        Assert.Equal(6, row.CachedInputTokens);
+        Assert.Equal(2, row.Requests);
+        Assert.Equal(3m, row.EstimatedCostUsd);
+        Assert.Equal(3m, data.Summary.EstimatedCostUsd);
+        Assert.Equal(2, data.Summary.TotalRequests);
+        Assert.DoesNotContain("azure-openai", data.Summary.CostByProvider.Keys);
+    }
+
     public void Dispose() => _connection.Dispose();
+
+
+    private static ApprovedModelPolicy Policy(string provider, string region, string modelId) => new([new ApprovedModel(provider, region, modelId, "Model A", true, true, "Jarvis1")]);
 
     private UsageDashboardDbContext CreateDbContext() => new(new DbContextOptionsBuilder<UsageDashboardDbContext>().UseSqlite(_connection).Options);
 
-    private static AiUsageRecord Record(string provider, string alias, DateTimeOffset start, decimal cost = 1m) =>
-        new(provider, "region", alias.ToLowerInvariant(), alias, start, start.AddHours(1), 10, 5, 3, 1, cost);
+    private static AiUsageRecord Record(string provider, string alias, DateTimeOffset start, decimal cost = 1m, string? modelId = null) =>
+        new(provider, "region", modelId ?? alias.ToLowerInvariant(), alias, start, start.AddHours(1), 10, 5, 3, 1, cost);
 
     private sealed class StubProvider(string providerName) : IAiUsageProvider
     {

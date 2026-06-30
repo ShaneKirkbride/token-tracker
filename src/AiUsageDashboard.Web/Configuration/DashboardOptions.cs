@@ -9,6 +9,7 @@ public sealed class ProviderOptions
     public ProviderEndpointOptions AwsBedrock { get; set; } = new() { Name = "aws-bedrock" };
     public ProviderEndpointOptions AzureOpenAi { get; set; } = new() { Name = "azure-openai" };
     public ProviderEndpointOptions GoogleVertex { get; set; } = new() { Name = "google-vertex" };
+    public ProviderEndpointOptions Mock { get; set; } = new() { Name = "mock" };
 }
 
 public sealed class ProviderEndpointOptions

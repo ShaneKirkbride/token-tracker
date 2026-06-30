@@ -17,6 +17,15 @@ public sealed class ApprovedModelPolicy(IEnumerable<ApprovedModel> approvedModel
         return _keys.Contains(BuildKey(provider, region, modelId));
     }
 
+    public IEnumerable<AiUsageRecord> Filter(IEnumerable<AiUsageRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        return records.Where(record => !string.IsNullOrWhiteSpace(record.Provider)
+            && !string.IsNullOrWhiteSpace(record.Region)
+            && !string.IsNullOrWhiteSpace(record.ModelId)
+            && IsApproved(record.Provider, record.Region, record.ModelId));
+    }
+
     private static string BuildKey(ApprovedModel model) => BuildKey(model.Provider, model.Region, model.ModelId);
     private static string BuildKey(string provider, string region, string modelId) => $"{provider}|{region}|{modelId}";
 }
