@@ -65,7 +65,7 @@ public sealed class UsageRepositoryTests : IDisposable
         var repository = new EfUsageSnapshotRepository(db);
         await repository.StoreAsync([], DateTimeOffset.UtcNow, CancellationToken.None);
         await repository.StoreAsync([Record("aws", "Model A", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 1m)], DateTimeOffset.UtcNow, CancellationToken.None);
-        var service = new DashboardQueryService(repository);
+        var service = new DashboardQueryService(repository, [new StubProvider("aws")]);
 
         var data = await service.GetDashboardAsync(DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-02T00:00:00Z"), CancellationToken.None);
 
@@ -74,10 +74,39 @@ public sealed class UsageRepositoryTests : IDisposable
         Assert.Equal(1m, data.Summary.EstimatedCostUsd);
     }
 
+    [Fact]
+    public async Task GetDashboardAsync_HidesRecordsForUnknownProviders()
+    {
+        await using var db = CreateDbContext();
+        await db.Database.EnsureCreatedAsync(CancellationToken.None);
+        var repository = new EfUsageSnapshotRepository(db);
+        await repository.StoreAsync([
+            Record("aws", "Model A", DateTimeOffset.Parse("2026-06-01T00:00:00Z"), 1m),
+            Record("unknown", "Model B", DateTimeOffset.Parse("2026-06-01T02:00:00Z"), 2m)
+        ], DateTimeOffset.UtcNow, CancellationToken.None);
+        var service = new DashboardQueryService(repository, [new StubProvider("aws")]);
+
+        var data = await service.GetDashboardAsync(DateTimeOffset.Parse("2026-06-01T00:00:00Z"), DateTimeOffset.Parse("2026-06-02T00:00:00Z"), CancellationToken.None);
+
+        Assert.Single(data.Records);
+        Assert.Equal("aws", data.Records[0].Provider);
+        Assert.Single(data.CostOverTime);
+        Assert.Equal(1m, data.Summary.EstimatedCostUsd);
+        Assert.Equal(1m, data.CostOverTime[0].CostUsd);
+        Assert.DoesNotContain("unknown", data.Summary.CostByProvider.Keys);
+    }
+
     public void Dispose() => _connection.Dispose();
 
     private UsageDashboardDbContext CreateDbContext() => new(new DbContextOptionsBuilder<UsageDashboardDbContext>().UseSqlite(_connection).Options);
 
     private static AiUsageRecord Record(string provider, string alias, DateTimeOffset start, decimal cost = 1m) =>
         new(provider, "region", alias.ToLowerInvariant(), alias, start, start.AddHours(1), 10, 5, 3, 1, cost);
+
+    private sealed class StubProvider(string providerName) : IAiUsageProvider
+    {
+        public string ProviderName { get; } = providerName;
+
+        public Task<IReadOnlyList<AiUsageRecord>> GetUsageAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<AiUsageRecord>>([]);
+    }
 }
